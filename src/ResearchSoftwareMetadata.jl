@@ -16,11 +16,8 @@ using YAML
 Read a `Project.toml` file in and return it in its canonical order in
 an OrderedDict.
 """
-function read_project()
-    @error pwd()
-    dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
-    @error dir
-    file = joinpath(dir, "Project.toml")
+function read_project(file = joinpath(readchomp(`$(Git.git()) rev-parse --show-toplevel`), "Project.toml"))
+    @error file
     project_d = TOML.parsefile(file)
     project = OrderedDict{String, Any}()
     for key in [
@@ -142,8 +139,7 @@ end
 Returns the operating systems that the GitHub workflows associated with this package
 work on. This is presumed to represent the operating systems that the software runs on.
 """
-function get_os_from_workflows()
-    dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+function get_os_from_workflows(dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
     workflow_folder = joinpath(dir, ".github", "workflows")
     files = filter(isfile, readdir(workflow_folder, join = true))
     oses = Set{String}()
@@ -192,11 +188,10 @@ field - `false` leaves the instructions as is, `true` sets it to the same as the
 and a string sets it to that value. If `update` is true, mismatches between version numbers in
 `codemeta.json` are accepted.
 """
-function crosswalk(; category = nothing, keywords = nothing, build = false,
+function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`); category = nothing, keywords = nothing, build = false,
                    update = false)
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
-
-    project = read_project()
+    @error git_dir
+    project = read_project(git_dir)
     proj_version = VersionNumber(project["version"])
 
     now = string(today())
@@ -216,10 +211,8 @@ function crosswalk(; category = nothing, keywords = nothing, build = false,
 
     repos = replace.(urls, r"^.*/([^/]+)$" => s"\1")
 
-    @error pwd()
     @error git_dir
     file = joinpath(git_dir, "codemeta.json")
-    @error file
     codemeta = isfile(file) ?
                JSON.parsefile(file, dicttype = OrderedDict) :
                OrderedDict{String, Any}()
@@ -488,7 +481,7 @@ function crosswalk(; category = nothing, keywords = nothing, build = false,
     end
 
     # Repeat ro ensure correct order if there were elements missing
-    project = read_project()
+    project = read_project(git_dir)
     open(file, "w") do io
         return TOML.print(io, project)
     end
@@ -586,13 +579,13 @@ function crosswalk(; category = nothing, keywords = nothing, build = false,
         return JSON.print(io, codemeta, 4)
     end
 
-    crosswalk = OrderedDict{String, Any}()
-    crosswalk["title"] = codemeta["name"]
+    crosswalk_d = OrderedDict{String, Any}()
+    crosswalk_d["title"] = codemeta["name"]
     if haskey(codemeta, "description")
-        crosswalk["description"] = codemeta["description"]
+        crosswalk_d["description"] = codemeta["description"]
     end
-    crosswalk["upload_type"] = "software"
-    crosswalk["creators"] = []
+    crosswalk_d["upload_type"] = "software"
+    crosswalk_d["creators"] = []
     for author in codemeta["author"]
         dict = OrderedDict{String, String}()
         dict["name"] = "$(author["familyName"]), $(author["givenName"])"
@@ -611,22 +604,22 @@ function crosswalk(; category = nothing, keywords = nothing, build = false,
                                       "https://ror.org/" => "")
             end
         end
-        push!(crosswalk["creators"], dict)
+        push!(crosswalk_d["creators"], dict)
     end
     if !isnothing(open_license)
-        crosswalk["access_right"] = open_license ? "open" : "closed"
+        crosswalk_d["access_right"] = open_license ? "open" : "closed"
     end
-    crosswalk["license"] = project["license"]["SPDX"]
+    crosswalk_d["license"] = project["license"]["SPDX"]
     dict = OrderedDict{String, String}()
     dict["scheme"] = "url"
     dict["identifier"] = codemeta["codeRepository"]
     dict["relation"] = "isOriginalFormOf"
-    crosswalk["related_identifiers"] = [dict]
-    crosswalk["keywords"] = codemeta["keywords"]
+    crosswalk_d["related_identifiers"] = [dict]
+    crosswalk_d["keywords"] = codemeta["keywords"]
 
     file = joinpath(git_dir, ".zenodo.json")
     open(file, "w") do io
-        return JSON.print(io, crosswalk, 4)
+        return JSON.print(io, crosswalk_d, 4)
     end
 
     # Recursively walk through the directory
@@ -662,9 +655,8 @@ end
 Increases the `Project.toml` version number by a patch (e.g. 0.4.1 to 0.4.2), and then
 runs `ResearchSoftwareMetadata.crosswalk()` to propagate this information.
 """
-function increase_patch()
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
-    project = read_project()
+function increase_patch(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
+    project = read_project(git_dir)
     version = project["version"]
     v = VersionNumber(version)
     new_version = VersionNumber(v.major, v.minor, v.patch + 1)
@@ -675,7 +667,7 @@ function increase_patch()
         return TOML.print(io, project)
     end
 
-    return crosswalk(update = true)
+    return crosswalk(git_dir, update = true)
 end
 
 """
@@ -684,9 +676,8 @@ end
 Increases the `Project.toml` version number by a minor number (e.g. 0.4.1 to 0.5.0), and then
 runs `ResearchSoftwareMetadata.crosswalk()` to propagate this information.
 """
-function increase_minor()
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
-    project = read_project()
+function increase_minor(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
+    project = read_project(git_dir)
     version = project["version"]
     v = VersionNumber(version)
     new_version = VersionNumber(v.major, v.minor + 1, 0)
@@ -697,7 +688,7 @@ function increase_minor()
         return TOML.print(io, project)
     end
 
-    return crosswalk(update = true)
+    return crosswalk(git_dir, update = true)
 end
 
 """
@@ -706,9 +697,8 @@ end
 Increases the `Project.toml` version number by a major number (e.g. 0.4.1 to 1.0.0), and then
 runs `ResearchSoftwareMetadata.crosswalk()` to propagate this information.
 """
-function increase_major()
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
-    project = read_project()
+function increase_major(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
+    project = read_project(git_dir)
     version = project["version"]
     v = VersionNumber(version)
     new_version = VersionNumber(v.major + 1, 0, 0)
@@ -719,7 +709,7 @@ function increase_major()
         return TOML.print(io, project)
     end
 
-    return crosswalk(update = true)
+    return crosswalk(git_dir, update = true)
 end
 
 end
