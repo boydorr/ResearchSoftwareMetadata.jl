@@ -336,7 +336,7 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         end
     end
 
-    first_release_date = get_first_release_date()
+    first_release_date = get_first_release_date(git_dir)
     if !isnothing(first_release_date)
         if haskey(codemeta, "datePublished")
             codemeta["datePublished"] == first_release_date ||
