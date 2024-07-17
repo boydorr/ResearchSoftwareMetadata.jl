@@ -192,7 +192,7 @@ and a string sets it to that value. If `update` is true, mismatches between vers
 """
 function crosswalk(; category = nothing, keywords = nothing, build = false,
                    update = false)
-    git_dir = joinpath(splitpath(readchomp(`$(Git.git()) rev-parse --show-toplevel`)))
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
 
     project = read_project()
     proj_version = VersionNumber(project["version"])
