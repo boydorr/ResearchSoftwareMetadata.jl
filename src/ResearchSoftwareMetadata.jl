@@ -17,7 +17,9 @@ Read a `Project.toml` file in and return it in its canonical order in
 an OrderedDict.
 """
 function read_project()
+    @error pwd()
     dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    @error dir
     file = joinpath(dir, "Project.toml")
     project_d = TOML.parsefile(file)
     project = OrderedDict{String, Any}()
@@ -214,7 +216,10 @@ function crosswalk(; category = nothing, keywords = nothing, build = false,
 
     repos = replace.(urls, r"^.*/([^/]+)$" => s"\1")
 
+    @error pwd()
+    @error git_dir
     file = joinpath(git_dir, "codemeta.json")
+    @error file
     codemeta = isfile(file) ?
                JSON.parsefile(file, dicttype = OrderedDict) :
                OrderedDict{String, Any}()
