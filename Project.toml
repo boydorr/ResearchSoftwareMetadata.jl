@@ -3,8 +3,33 @@ uuid = "58378933-4625-47fa-851e-05ee27d397bd"
 authors = ["Richard Reeve <richard.reeve@glasgow.ac.uk>"]
 version = "0.1.0"
 
+[license]
+SPDX = "BSD-2-Clause"
+
+[deps]
+DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Git = "d7ba0133-e1db-5d97-8f8c-041e4b3a1eb2"
+HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
+
 [compat]
+DataStructures = "0.18"
+Git = "1"
+HTTP = "1"
+JSON = "0.21"
+TOML = "1"
+YAML = "0.4"
 julia = "1.6.7"
+
+[[author_details]]
+name = "Richard Reeve"
+orcid = "0000-0003-2589-8091"
+
+    [[author_details.affiliation]]
+    ror = "00vtgdb53"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
