@@ -1,8 +1,10 @@
+# ResearchSoftwareMetadata documentation
+
 ```@meta
 CurrentModule = ResearchSoftwareMetadata
 ```
 
-# ResearchSoftwareMetadata
+## ResearchSoftwareMetadata
 
 Documentation for [ResearchSoftwareMetadata](https://github.com/richardreeve/ResearchSoftwareMetadata.jl).
 

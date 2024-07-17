@@ -8,6 +8,7 @@
     "name": "ResearchSoftwareMetadata.jl",
     "issueTracker": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl/issues",
     "readme": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl/blob/main/README.md",
+    "buildInstructions": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl/blob/main/README.md",
     "dateCreated": "2024-07-17",
     "operatingSystem": [
         "Linux",
