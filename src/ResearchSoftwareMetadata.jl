@@ -190,7 +190,8 @@ field - `false` leaves the instructions as is, `true` sets it to the same as the
 and a string sets it to that value. If `update` is true, mismatches between version numbers in
 `codemeta.json` are accepted.
 """
-function crosswalk(; category = nothing, keywords = nothing, build = false, update = false)
+function crosswalk(; category = nothing, keywords = nothing, build = false,
+                   update = false)
     git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
 
     project = read_project()
@@ -649,7 +650,6 @@ function crosswalk(; category = nothing, keywords = nothing, build = false, upda
 
     return nothing
 end
-
 
 """
     ResearchSoftwareMetadata.increase_patch()

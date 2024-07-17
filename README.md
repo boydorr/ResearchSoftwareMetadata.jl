@@ -79,7 +79,6 @@ ResearchSoftwareMetadata.increase_major() # Bump major version (e.g. 0.4.1 -> 1.
 You might also consider reformatting all of your julia code to a consistent format. A `.JuliaJormatter.toml` file in the package root defines what the formatting standard should be.
 
 ```julia
-
 Pkg.add("JuliaFormatter")
 Pkg.develop("MyPackage")
 using JuliaFormatter

@@ -27,7 +27,7 @@ end
     @test_nowarn ResearchSoftwareMetadata.increase_minor()
     @test_nowarn ResearchSoftwareMetadata.increase_major()
     open(joinpath(git_dir, "Project.toml"), "w") do io
-        TOML.print(io, project)
+        return TOML.print(io, project)
     end
     @test_nowarn ResearchSoftwareMetadata.crosswalk(update = true)
     @test is_repo_clean(git_dir)
