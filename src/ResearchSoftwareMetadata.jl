@@ -183,9 +183,10 @@ It logs warnings and errors if it identifies inconsistencies while it is editing
 The software category can be set with the `category` argument, likewise the `keywords` argument
 can contain a vector of keyword strings. The `build` argument sets the `buildInstructions` RSMD
 field - `false` leaves the instructions as is, `true` sets it to the same as the README,
-and a string sets it to that value.
+and a string sets it to that value. If `update` is true, mismatches between version numbers in
+`codemeta.json` are accepted.
 """
-function crosswalk(; category = nothing, keywords = nothing, build = false)
+function crosswalk(; category = nothing, keywords = nothing, build = false, update = false)
     project = read_project()
     proj_version = VersionNumber(project["version"])
 
@@ -280,7 +281,9 @@ function crosswalk(; category = nothing, keywords = nothing, build = false)
         @debug "Still on latest release version: $tag"
         codemeta["dateModified"] = tag_date
         if cm_version ≠ tag
-            @warn "Correcting codemeta tag version ($cm_version) to release tag ($tag)"
+            if !update
+                @warn "Correcting codemeta tag version ($cm_version) to release tag ($tag)"
+            end
             cm_version = tag
             tag_year = string(year(Date(tag_date)))
             if tag_year ≠ years
@@ -645,7 +648,7 @@ function increase_patch()
         return TOML.print(io, project)
     end
 
-    return crosswalk()
+    return crosswalk(update = true)
 end
 
 """
@@ -665,7 +668,7 @@ function increase_minor()
         return TOML.print(io, project)
     end
 
-    return crosswalk()
+    return crosswalk(update = true)
 end
 
 """
@@ -675,6 +678,8 @@ Increases the `Project.toml` version number by a major number (e.g. 0.4.1 to 1.0
 runs `ResearchSoftwareMetadata.crosswalk()` to propagate this information.
 """
 function increase_major()
+    project = read_project()
+    version = project["version"]
     v = VersionNumber(version)
     new_version = VersionNumber(v.major + 1, 0, 0)
     @info "Bumping major version from $version to $new_version"
@@ -682,8 +687,8 @@ function increase_major()
     open("Project.toml", "w") do io
         return TOML.print(io, project)
     end
-    
-    return crosswalk()
+
+    return crosswalk(update = true)
 end
 
 end

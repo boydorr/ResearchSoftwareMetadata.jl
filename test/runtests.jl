@@ -21,4 +21,7 @@ end
     @test_nowarn global_logger(SimpleLogger(stderr, Logging.Warn))
     @test_nowarn ResearchSoftwareMetadata.crosswalk()
     @test is_repo_clean(".")
+    @test_nowarn ResearchSoftwareMetadata.increase_patch()
+    @test_nowarn ResearchSoftwareMetadata.increase_minor()
+    @test_nowarn ResearchSoftwareMetadata.increase_major()
 end

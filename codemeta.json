@@ -15,10 +15,10 @@
         "Windows",
         "macOS"
     ],
-    "version": "v0.1.0",
+    "version": "v2.0.0",
     "dateModified": "2024-07-17",
     "datePublished": "2024-07-17",
-    "downloadUrl": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl/archive/refs/tags/v0.1.0.tar.gz",
+    "downloadUrl": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl/archive/refs/tags/v2.0.0.tar.gz",
     "license": "https://spdx.org/licenses/BSD-2-Clause",
     "author": [
         {
