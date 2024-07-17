@@ -17,7 +17,9 @@ Read a `Project.toml` file in and return it in its canonical order in
 an OrderedDict.
 """
 function read_project()
-    project_d = TOML.parsefile("Project.toml")
+    dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    file = joinpath(dir, "Project.toml")
+    project_d = TOML.parsefile(file)
     project = OrderedDict{String, Any}()
     for key in [
         "name",
@@ -139,7 +141,9 @@ Returns the operating systems that the GitHub workflows associated with this pac
 work on. This is presumed to represent the operating systems that the software runs on.
 """
 function get_os_from_workflows()
-    files = filter(isfile, readdir(".github/workflows", join = true))
+    dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    workflow_folder = joinpath(dir, ".github", "workflows")
+    files = filter(isfile, readdir(workflow_folder, join = true))
     oses = Set{String}()
     for file in files
         jobs = YAML.load_file(file)["jobs"]
@@ -187,6 +191,8 @@ and a string sets it to that value. If `update` is true, mismatches between vers
 `codemeta.json` are accepted.
 """
 function crosswalk(; category = nothing, keywords = nothing, build = false, update = false)
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+
     project = read_project()
     proj_version = VersionNumber(project["version"])
 
@@ -207,8 +213,9 @@ function crosswalk(; category = nothing, keywords = nothing, build = false, upda
 
     repos = replace.(urls, r"^.*/([^/]+)$" => s"\1")
 
-    codemeta = isfile("codemeta.json") ?
-               JSON.parsefile("codemeta.json", dicttype = OrderedDict) :
+    file = joinpath(git_dir, "codemeta.json")
+    codemeta = isfile(file) ?
+               JSON.parsefile(file, dicttype = OrderedDict) :
                OrderedDict{String, Any}()
 
     codemeta["@context"] = "https://w3id.org/codemeta/3.0"
@@ -456,18 +463,23 @@ function crosswalk(; category = nothing, keywords = nothing, build = false, upda
                               r"<HOLDERS?>"i => name_list,
                               r"<name of author>"i => name_list,
                               r"<author's name or designee>"i => name_list)
-            open("LICENSE", "w") do file
+            file = joinpath(git_dir, "LICENSE")
+            open(file, "w") do file
                 return write(file, content)
             end
-            rm("LICENSE.md", force = true)
+            file = joinpath(git_dir, "LICENSE.md")
+            rm(file, force = true)
         end
     end
 
-    open("Project.toml", "w") do io
+    file = joinpath(git_dir, "Project.toml")
+    open(file, "w") do io
         return TOML.print(io, project)
     end
+
+    # Repeat ro ensure correct order if there were elements missing
     project = read_project()
-    open("Project.toml", "w") do io
+    open(file, "w") do io
         return TOML.print(io, project)
     end
 
@@ -559,7 +571,8 @@ function crosswalk(; category = nothing, keywords = nothing, build = false, upda
     end
     codemeta["keywords"] = sort(keywords)
 
-    open("codemeta.json", "w") do io
+    file = joinpath(git_dir, "codemeta.json")
+    open(file, "w") do io
         return JSON.print(io, codemeta, 4)
     end
 
@@ -601,13 +614,16 @@ function crosswalk(; category = nothing, keywords = nothing, build = false, upda
     crosswalk["related_identifiers"] = [dict]
     crosswalk["keywords"] = codemeta["keywords"]
 
-    open(".zenodo.json", "w") do io
+    file = joinpath(git_dir, ".zenodo.json")
+    open(file, "w") do io
         return JSON.print(io, crosswalk, 4)
     end
 
     # Recursively walk through the directory
-    for (root, _, files) in walkdir(".")
-        if !startswith(root, "./.git")
+    path = joinpath(git_dir, ".git")
+    notpath = joinpath(git_dir, ".github")
+    for (root, _, files) in walkdir(git_dir)
+        if !startswith(root, path) || startswith(root, notpath)
             for file in files
                 if endswith(file, ".jl")
                     jl_file = joinpath(root, file)
@@ -638,13 +654,15 @@ Increases the `Project.toml` version number by a patch (e.g. 0.4.1 to 0.4.2), an
 runs `ResearchSoftwareMetadata.crosswalk()` to propagate this information.
 """
 function increase_patch()
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     project = read_project()
     version = project["version"]
     v = VersionNumber(version)
     new_version = VersionNumber(v.major, v.minor, v.patch + 1)
     @info "Bumping patch version from $version to $new_version"
     project["version"] = string(new_version)
-    open("Project.toml", "w") do io
+    file = joinpath(git_dir, "Project.toml")
+    open(file, "w") do io
         return TOML.print(io, project)
     end
 
@@ -658,13 +676,15 @@ Increases the `Project.toml` version number by a minor number (e.g. 0.4.1 to 0.5
 runs `ResearchSoftwareMetadata.crosswalk()` to propagate this information.
 """
 function increase_minor()
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     project = read_project()
     version = project["version"]
     v = VersionNumber(version)
     new_version = VersionNumber(v.major, v.minor + 1, 0)
     @info "Bumping minor version from $version to $new_version"
     project["version"] = string(new_version)
-    open("Project.toml", "w") do io
+    file = joinpath(git_dir, "Project.toml")
+    open(file, "w") do io
         return TOML.print(io, project)
     end
 
@@ -678,13 +698,15 @@ Increases the `Project.toml` version number by a major number (e.g. 0.4.1 to 1.0
 runs `ResearchSoftwareMetadata.crosswalk()` to propagate this information.
 """
 function increase_major()
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     project = read_project()
     version = project["version"]
     v = VersionNumber(version)
     new_version = VersionNumber(v.major + 1, 0, 0)
     @info "Bumping major version from $version to $new_version"
     project["version"] = string(new_version)
-    open("Project.toml", "w") do io
+    file = joinpath(git_dir, "Project.toml")
+    open(file, "w") do io
         return TOML.print(io, project)
     end
 
