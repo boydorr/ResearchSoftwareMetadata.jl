@@ -1,0 +1,27 @@
+{
+    "title": "ResearchSoftwareMetadata.jl",
+    "upload_type": "software",
+    "creators": [
+        {
+            "name": "Reeve, Richard",
+            "orcid": "0000-0003-2589-8091",
+            "affiliation": "University of Glasgow",
+            "ror": "00vtgdb53"
+        }
+    ],
+    "access_right": "open",
+    "license": "BSD-2-Clause",
+    "related_identifiers": [
+        {
+            "scheme": "url",
+            "identifier": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl",
+            "relation": "isOriginalFormOf"
+        }
+    ],
+    "keywords": [
+        "RSMD",
+        "julia",
+        "metadata",
+        "research software"
+    ]
+}
