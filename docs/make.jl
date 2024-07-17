@@ -1,5 +1,10 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
+using Pkg
+"ResearchSoftwareMetadata" ∈ [p.name for p in values(Pkg.dependencies())] &&
+    Pkg.rm("ResearchSoftwareMetadata")
+Pkg.develop(url = "https://github.com/richardreeve/ResearchSoftwareMetadata.jl.git")
+
 using ResearchSoftwareMetadata
 using Documenter
 

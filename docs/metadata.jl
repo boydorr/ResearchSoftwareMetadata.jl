@@ -10,17 +10,20 @@ Pkg.update()
 if isdir("examples")
     if isfile("examples/Project.toml")
         Pkg.activate("examples")
-        Pkg.rm("ResearchSoftwareMetadata")
+        "ResearchSoftwareMetadata" ∈
+        [p.name for p in values(Pkg.dependencies())] &&
+            Pkg.rm("ResearchSoftwareMetadata")
         Pkg.update()
-        Pkg.develop("ResearchSoftwareMetadata")
+        Pkg.develop(url = "https://github.com/richardreeve/ResearchSoftwareMetadata.jl.git")
     end
 end
 
 # Update docs folder packages
 Pkg.activate("docs")
-Pkg.rm("ResearchSoftwareMetadata")
 Pkg.update()
-Pkg.develop("ResearchSoftwareMetadata")
+"ResearchSoftwareMetadata" ∈ [p.name for p in values(Pkg.dependencies())] &&
+    Pkg.rm("ResearchSoftwareMetadata")
+Pkg.develop(url = "https://github.com/richardreeve/ResearchSoftwareMetadata.jl.git")
 
 # Reformat files in package
 using JuliaFormatter
