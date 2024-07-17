@@ -152,7 +152,8 @@ function crosswalk(; category = nothing, keywords = nothing)
     init = readchomp(`$(Git.git()) log --max-parents=0 --format=%ad --date=short -n 1`)
     tags = readlines(`$(Git.git()) tag -l --sort="version:refname"`)
     tag = isempty(tags) ? proj_version : maximum(VersionNumber.(tags))
-    tag_date = isempty(tags) ? now : readchomp(`$(Git.git()) log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/v$tag`)
+    tag_date = isempty(tags) ? now :
+               readchomp(`$(Git.git()) log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/v$tag`)
     branch = readchomp(`$(Git.git()) branch --show-current`)
     remotes = split(readchomp(`$(Git.git()) remote`), '\n')
     urls = String[]
@@ -168,15 +169,15 @@ function crosswalk(; category = nothing, keywords = nothing)
                JSON.parsefile("codemeta.json", dicttype = OrderedDict) :
                OrderedDict{String, Any}()
 
-    codemeta["@context"] = "https://w3id.org/codemeta/3.0";
-    codemeta["type"] = "SoftwareSourceCode";
+    codemeta["@context"] = "https://w3id.org/codemeta/3.0"
+    codemeta["type"] = "SoftwareSourceCode"
     if isnothing(category)
-        get!(codemeta, "applicationCategory", "ecology");
+        get!(codemeta, "applicationCategory", "ecology")
     else
-        codemeta["applicationCategory"] = category;
+        codemeta["applicationCategory"] = category
     end
-    codemeta["programmingLanguage"] = "julia";
-    codemeta["developmentStatus"] = "active";
+    codemeta["programmingLanguage"] = "julia"
+    codemeta["developmentStatus"] = "active"
 
     repo_index = "origin" ∈ remotes ?
                  repo_index = findfirst(==("origin"), remotes) : 1
@@ -589,7 +590,7 @@ function increase_patch()
     @info "Bumping patch version from $version to $new_version"
     project["version"] = string(new_version)
     open("Project.toml", "w") do io
-        TOML.print(io, project)
+        return TOML.print(io, project)
     end
     return crosswalk()
 end
@@ -602,7 +603,7 @@ function increase_minor()
     @info "Bumping minor version from $version to $new_version"
     project["version"] = string(new_version)
     open("Project.toml", "w") do io
-        TOML.print(io, project)
+        return TOML.print(io, project)
     end
     return crosswalk()
 end
@@ -613,7 +614,7 @@ function increase_major()
     @info "Bumping major version from $version to $new_version"
     project["version"] = string(new_version)
     open("Project.toml", "w") do io
-        TOML.print(io, project)
+        return TOML.print(io, project)
     end
     return crosswalk()
 end
