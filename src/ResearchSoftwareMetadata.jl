@@ -124,6 +124,7 @@ function get_first_release_date(git_dir = readchomp(`$(Git.git()) rev-parse --sh
     if response.status == 200
         data = TOML.parse(String(response.body))
         version = minimum(VersionNumber.(keys(data)))
+        cd(git_dir)
         date = readchomp(`$(Git.git()) log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/v$version`)
         return date
     elseif response.status == 404
@@ -196,6 +197,7 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     proj_version = VersionNumber(project["version"])
 
     now = string(today())
+    cd(git_dir)
     init = readchomp(`$(Git.git()) log --max-parents=0 --format=%ad --date=short -n 1`)
     tags = readlines(`$(Git.git()) tag -l --sort="version:refname"`)
     tag = isempty(tags) ? proj_version : maximum(VersionNumber.(tags))
