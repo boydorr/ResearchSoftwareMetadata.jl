@@ -10,6 +10,12 @@ using DataStructures
 using HTTP
 using YAML
 
+"""
+    ResearchSoftwareMetadata.read_project()
+
+Read a `Project.toml` file in and return it in its canonical order in
+an OrderedDict.
+"""
 function read_project()
     project_d = TOML.parsefile("Project.toml")
     project = OrderedDict{String, Any}()
@@ -48,6 +54,12 @@ function read_project()
     return project
 end
 
+"""
+    ResearchSoftwareMetadata.get_person_from_orcid(orcid::String)
+
+Take an `ORCID` from the user and query the orcid.org API to return
+a Dict containing the relevant metadata or nothing if no such ORCID exists.
+"""
 function get_person_from_orcid(orcid::String)
     url = "https://pub.orcid.org/v3.0/$orcid"
     headers = ["Accept" => "application/json"]
@@ -74,6 +86,12 @@ function get_person_from_orcid(orcid::String)
     end
 end
 
+"""
+    ResearchSoftwareMetadata.get_organisation_from_ror(ror::String)
+
+Take a `ROR` from the user and query the ror.org API to return
+a Dict containing the relevant metadata or nothing if no such ROR exists.
+"""
 function get_organisation_from_ror(ror::String)
     url = "https://api.ror.org/organizations/$ror"
 
@@ -88,6 +106,12 @@ function get_organisation_from_ror(ror::String)
     end
 end
 
+"""
+    ResearchSoftwareMetadata.get_first_release_date()
+
+Returns the first release date of this package on Julia's `General`
+Registry, or today's date if the package has not been registered yet.
+"""
 function get_first_release_date()
     project = read_project()
     package = project["name"]
@@ -101,13 +125,19 @@ function get_first_release_date()
         date = readchomp(`$(Git.git()) log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/v$version`)
         return date
     elseif response.status == 404
-        @warn "No release yet on General, imputing first release will be today"
+        @info "No release yet on General, imputing first release will be today"
         return string(today())
     end
 
     return nothing
 end
 
+"""
+    ResearchSoftwareMetadata.get_os_from_workflows()
+
+Returns the operating systems that the GitHub workflows associated with this package
+work on. This is presumed to represent the operating systems that the software runs on.
+"""
 function get_os_from_workflows()
     files = filter(isfile, readdir(".github/workflows", join = true))
     oses = Set{String}()
@@ -144,7 +174,18 @@ function get_os_from_workflows()
     return sort(collect(platforms))
 end
 
-function crosswalk(; category = nothing, keywords = nothing)
+"""
+    ResearchSoftwareMetadata.crosswalk(; category = nothing, keywords = nothing, build = false)
+
+Runs a crosswalk across `Project.toml`, `LICENSE`, `codemeta.json` and `.zenodo.json` as
+well as the julia source files to enforce consistency between the different metadata formats.
+It logs warnings and errors if it identifies inconsistencies while it is editing the files.
+The software category can be set with the `category` argument, likewise the `keywords` argument
+can contain a vector of keyword strings. The `build` argument sets the `buildInstructions` RSMD
+field - `false` leaves the instructions as is, `true` sets it to the same as the README,
+and a string sets it to that value.
+"""
+function crosswalk(; category = nothing, keywords = nothing, build = false)
     project = read_project()
     proj_version = VersionNumber(project["version"])
 
@@ -207,11 +248,14 @@ function crosswalk(; category = nothing, keywords = nothing)
     cm_readme == readme ||
         @info "README set to $cm_readme, not $readme"
 
-    if haskey(codemeta, "buildInstructions")
-        codemeta["buildInstructions"] == readme ||
-            @info "README set to $(codemeta["buildInstructions"]), not $readme"
+    if build isa Bool
+        if build
+            codemeta["buildInstructions"] = cm_readme
+        elseif !haskey(codemeta, "buildInstructions")
+            @warn "No build instructions, set using `build` keyword argument"
+        end
     else
-        @warn "No build instructions"
+        codemeta["buildInstructions"] = build
     end
 
     cm_created = get(codemeta, "dateCreated", "")
@@ -579,9 +623,17 @@ function crosswalk(; category = nothing, keywords = nothing)
             end
         end
     end
+
     return nothing
 end
 
+
+"""
+    ResearchSoftwareMetadata.increase_patch()
+
+Increases the `Project.toml` version number by a patch (e.g. 0.4.1 to 0.4.2), and then
+runs `ResearchSoftwareMetadata.crosswalk()` to propagate this information.
+"""
 function increase_patch()
     project = read_project()
     version = project["version"]
@@ -592,9 +644,16 @@ function increase_patch()
     open("Project.toml", "w") do io
         return TOML.print(io, project)
     end
+
     return crosswalk()
 end
 
+"""
+    ResearchSoftwareMetadata.increase_minor()
+
+Increases the `Project.toml` version number by a minor number (e.g. 0.4.1 to 0.5.0), and then
+runs `ResearchSoftwareMetadata.crosswalk()` to propagate this information.
+"""
 function increase_minor()
     project = read_project()
     version = project["version"]
@@ -605,9 +664,16 @@ function increase_minor()
     open("Project.toml", "w") do io
         return TOML.print(io, project)
     end
+
     return crosswalk()
 end
 
+"""
+    ResearchSoftwareMetadata.increase_major()
+
+Increases the `Project.toml` version number by a major number (e.g. 0.4.1 to 1.0.0), and then
+runs `ResearchSoftwareMetadata.crosswalk()` to propagate this information.
+"""
 function increase_major()
     v = VersionNumber(version)
     new_version = VersionNumber(v.major + 1, 0, 0)
@@ -616,6 +682,7 @@ function increase_major()
     open("Project.toml", "w") do io
         return TOML.print(io, project)
     end
+    
     return crosswalk()
 end
 
