@@ -276,7 +276,11 @@ function crosswalk(; category = nothing, keywords = nothing, build = false, upda
     cm_platforms = sort(string.(get(codemeta, "operatingSystem", String[])))
     if length(platforms) ≠ length(cm_platforms) ||
        any(platforms .≠ cm_platforms)
-        @error "codemeta platforms do not match workflows ($cm_platforms ≠ $platforms), fixing"
+        if isempty(cm_platforms)
+            @info "No platform info in codemeta.json, so filling from workflows ($platforms)"
+        else
+            @error "codemeta platforms do not match workflows ($cm_platforms ≠ $platforms), fixing"
+        end
         codemeta["operatingSystem"] = platforms
     end
 

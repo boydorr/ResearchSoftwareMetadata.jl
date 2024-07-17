@@ -1,6 +1,7 @@
 # ResearchSoftwareMetadata
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://richardreeve.github.io/ResearchSoftwareMetadata.jl/stable/)
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://richardreeve.github.io/ResearchSoftwareMetadata.jl/dev/)
 [![Build Status](https://github.com/richardreeve/ResearchSoftwareMetadata.jl/actions/workflows/testing.yaml/badge.svg?branch=main)](https://github.com/richardreeve/ResearchSoftwareMetadata.jl/actions/workflows/testing.yaml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/richardreeve/ResearchSoftwareMetadata.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/richardreeve/ResearchSoftwareMetadata.jl)
 [![PkgEval](https://JuliaCI.github.io/NanosoldierReports/pkgeval_badges/R/ResearchSoftwareMetadata.svg)](https://JuliaCI.github.io/NanosoldierReports/pkgeval_badges/R/ResearchSoftwareMetadata.html)
@@ -30,7 +31,7 @@ built and installed with `add`. For example:
 
 First you need to add a small amount of additional metadata into your `Project.toml` file.
 
-To  capture the license you are using and propagate it throughout the metadata files and through your julia code, add an [SPDX identifier](https://spdx.org/licenses/) to the file:
+To  capture the license you are using and propagate it throughout the metadata files and through your julia code, add an [SPDX license identifier](https://spdx.org/licenses/) to the file:
 
 ```toml
 [license]
