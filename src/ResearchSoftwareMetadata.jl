@@ -16,7 +16,8 @@ using YAML
 Read a `Project.toml` file in and return it in its canonical order in
 an OrderedDict.
 """
-function read_project(file = joinpath(readchomp(`$(Git.git()) rev-parse --show-toplevel`), "Project.toml"))
+function read_project(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
+    file = joinpath(git_dir, w"Project.toml")
     @error file
     project_d = TOML.parsefile(file)
     project = OrderedDict{String, Any}()
@@ -113,8 +114,8 @@ end
 Returns the first release date of this package on Julia's `General`
 Registry, or today's date if the package has not been registered yet.
 """
-function get_first_release_date()
-    project = read_project()
+function get_first_release_date(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
+    project = read_project(git_dir)
     package = project["name"]
     url = "https://raw.githubusercontent.com/JuliaRegistries/General/master/$(package[1])/$package/Versions.toml"
     headers = ["Accept" => "application/toml"]
@@ -139,8 +140,8 @@ end
 Returns the operating systems that the GitHub workflows associated with this package
 work on. This is presumed to represent the operating systems that the software runs on.
 """
-function get_os_from_workflows(dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
-    workflow_folder = joinpath(dir, ".github", "workflows")
+function get_os_from_workflows(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
+    workflow_folder = joinpath(git_dir, ".github", "workflows")
     files = filter(isfile, readdir(workflow_folder, join = true))
     oses = Set{String}()
     for file in files
