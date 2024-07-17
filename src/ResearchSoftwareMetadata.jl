@@ -17,7 +17,7 @@ Read a `Project.toml` file in and return it in its canonical order in
 an OrderedDict.
 """
 function read_project(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
-    file = joinpath(git_dir, w"Project.toml")
+    file = joinpath(git_dir, "Project.toml")
     @error file
     project_d = TOML.parsefile(file)
     project = OrderedDict{String, Any}()
