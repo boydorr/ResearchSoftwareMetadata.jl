@@ -1,16 +1,20 @@
 name: CI
+
 on:
   push:
     branches:
       - main
-    tags: ['*']
+    tags:
+      - 'v*'
   pull_request:
   workflow_dispatch:
+
 concurrency:
   # Skip intermediate builds: always.
   # Cancel intermediate builds: only if it is a pull request build.
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
 jobs:
   test:
     name: Julia ${{ matrix.julia-version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
@@ -23,7 +27,7 @@ jobs:
       fail-fast: false
       matrix:
         julia-version:
-          - '1.6'
+          - '1.8'
           - '1'
         os:
           - ubuntu-latest
