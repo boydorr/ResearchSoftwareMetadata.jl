@@ -170,7 +170,8 @@ function get_os_from_workflows(git_dir = readchomp(`$(Git.git()) rev-parse --sho
     platforms = Set{String}()
     for os in oses
         push!(platforms,
-              replace(os, "ubuntu" => "Linux", "windows" => "Windows",
+              replace(replace(replace(os, "ubuntu" => "Linux"),
+                              "windows" => "Windows"),
                       r"-.*" => ""))
     end
 
@@ -189,7 +190,8 @@ field - `false` leaves the instructions as is, `true` sets it to the same as the
 and a string sets it to that value. If `update` is true, mismatches between version numbers in
 `codemeta.json` are accepted.
 """
-function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`); category = nothing, keywords = nothing, build = false,
+function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`);
+                   category = nothing, keywords = nothing, build = false,
                    update = false)
     project = read_project(git_dir)
     proj_version = VersionNumber(project["version"])
