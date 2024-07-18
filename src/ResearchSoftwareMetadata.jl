@@ -458,16 +458,18 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
             name_list = join(just_names, ", ", " and ")
             json = JSON.parse(String(response.body))
             open_license = json["isOsiApproved"]
-            text = json["licenseText"]
-            content = replace(text,
-                              r"<year>"i => years,
-                              r"<owners?>"i => name_list,
-                              r"<copyright holders?>"i => name_list,
-                              r"<Owner Organization Name>"i => name_list,
-                              r"<Asset Owner>"i => name_list,
-                              r"<HOLDERS?>"i => name_list,
-                              r"<name of author>"i => name_list,
-                              r"<author's name or designee>"i => name_list)
+            content = json["licenseText"]
+            replaces = [r"<year>"i => years,
+                r"<owners?>"i => name_list,
+                r"<copyright holders?>"i => name_list,
+                r"<Owner Organization Name>"i => name_list,
+                r"<Asset Owner>"i => name_list,
+                r"<HOLDERS?>"i => name_list,
+                r"<name of author>"i => name_list,
+                r"<author's name or designee>"i => name_list]
+            for r in replaces
+                content = replace(content, r)
+            end
             file = joinpath(git_dir, "LICENSE")
             open(file, "w") do file
                 return write(file, content)
