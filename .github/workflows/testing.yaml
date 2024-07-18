@@ -49,6 +49,8 @@ jobs:
 #            arch: arm64
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.julia-version }}
@@ -71,8 +73,6 @@ jobs:
       statuses: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1'
