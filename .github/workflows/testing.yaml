@@ -27,7 +27,7 @@ jobs:
       fail-fast: false
       matrix:
         julia-version:
-          - '1.8'
+          - '1.6'
           - '1'
         os:
           - ubuntu-latest
@@ -38,7 +38,7 @@ jobs:
           - arm64
         exclude:
           - os: macOS-latest
-            julia-version: '1.8'
+            julia-version: '1.6'
             arch: arm64
           - os: macOS-latest
             julia-version: '1'
