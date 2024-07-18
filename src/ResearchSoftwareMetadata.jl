@@ -18,7 +18,6 @@ an OrderedDict.
 """
 function read_project(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
     file = joinpath(git_dir, "Project.toml")
-    @error file
     project_d = TOML.parsefile(file)
     project = OrderedDict{String, Any}()
     for key in [
@@ -125,7 +124,6 @@ function get_first_release_date(git_dir = readchomp(`$(Git.git()) rev-parse --sh
         data = TOML.parse(String(response.body))
         version = minimum(VersionNumber.(keys(data)))
         cd(git_dir)
-        @error git_dir
         date = readchomp(`$(Git.git()) log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/v$version`)
         return date
     elseif response.status == 404
@@ -193,7 +191,6 @@ and a string sets it to that value. If `update` is true, mismatches between vers
 """
 function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`); category = nothing, keywords = nothing, build = false,
                    update = false)
-    @error git_dir
     project = read_project(git_dir)
     proj_version = VersionNumber(project["version"])
 
@@ -215,7 +212,6 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
 
     repos = replace.(urls, r"^.*/([^/]+)$" => s"\1")
 
-    @error git_dir
     file = joinpath(git_dir, "codemeta.json")
     codemeta = isfile(file) ?
                JSON.parsefile(file, dicttype = OrderedDict) :
