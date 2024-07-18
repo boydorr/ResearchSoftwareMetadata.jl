@@ -17,14 +17,14 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
 DataStructures = "0.18"
-Dates = "1.8"
+Dates = "1.6"
 Git = "1"
 HTTP = "1"
 JSON = "0.21"
 Logging = "1"
 TOML = "1"
 YAML = "0.4"
-julia = "1.8"
+julia = "1.6.7"
 
 [[author_details]]
 name = "Richard Reeve"
