@@ -643,7 +643,7 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
                                    "# SPDX-License-Identifier: $(project["license"]["SPDX"])")
                     end
                     open(jl_file, "w") do io
-                        return println.(io, data)
+                        return println.(Ref(io), data)
                     end
                 end
             end
