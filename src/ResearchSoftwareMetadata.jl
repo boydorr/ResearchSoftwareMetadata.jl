@@ -125,6 +125,7 @@ function get_first_release_date(git_dir = readchomp(`$(Git.git()) rev-parse --sh
         data = TOML.parse(String(response.body))
         version = minimum(VersionNumber.(keys(data)))
         cd(git_dir)
+        @error git_dir
         date = readchomp(`$(Git.git()) log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/v$version`)
         return date
     elseif response.status == 404
