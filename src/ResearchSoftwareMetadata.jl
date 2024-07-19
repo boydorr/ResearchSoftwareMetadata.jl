@@ -23,9 +23,9 @@ function read_project(git_dir = readchomp(`$(Git.git()) rev-parse --show-topleve
     for key in [
         "name",
         "uuid",
+        "license",
         "authors",
         "version",
-        "license",
         "deps",
         "weakdeps",
         "extensions",
@@ -421,7 +421,7 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     license = nothing
 
     if haskey(project, "license")
-        proj_license = project["license"]["SPDX"]
+        proj_license = project["license"]
         cm_license = "https://spdx.org/licenses/" * proj_license
         if haskey(codemeta, "license")
             if codemeta["license"] == cm_license
@@ -438,10 +438,10 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         end
     else
         if haskey(codemeta, "license")
-            project["license"] = Dict("SPDX" => replace(codemeta["license"],
-                                                        "https://spdx.org/licenses/" => ""))
+            project["license"] = replace(codemeta["license"],
+                                         "https://spdx.org/licenses/" => "")
             haslicense = true
-            license = project["license"]["SPDX"]
+            license = project["license"]
         else
             @warn "No license metadata"
         end
@@ -613,7 +613,7 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     if !isnothing(open_license)
         crosswalk_d["access_right"] = open_license ? "open" : "closed"
     end
-    crosswalk_d["license"] = project["license"]["SPDX"]
+    crosswalk_d["license"] = project["license"]
     dict = OrderedDict{String, String}()
     dict["scheme"] = "url"
     dict["identifier"] = codemeta["codeRepository"]
@@ -636,11 +636,11 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
                     jl_file = joinpath(root, file)
                     data = readlines(jl_file)
                     if startswith(data[1], "# SPDX-License-Identifier:")
-                        data[1] = "# SPDX-License-Identifier: $(project["license"]["SPDX"])"
+                        data[1] = "# SPDX-License-Identifier: $(project["license"])"
                     else
                         pushfirst!(data, "")
                         pushfirst!(data,
-                                   "# SPDX-License-Identifier: $(project["license"]["SPDX"])")
+                                   "# SPDX-License-Identifier: $(project["license"])")
                     end
                     open(jl_file, "w") do io
                         return println.(Ref(io), data)

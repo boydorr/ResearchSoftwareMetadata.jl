@@ -1,10 +1,8 @@
 name = "ResearchSoftwareMetadata"
 uuid = "58378933-4625-47fa-851e-05ee27d397bd"
+license = "BSD-2-Clause"
 authors = ["Richard Reeve <richard.reeve@glasgow.ac.uk>"]
-version = "0.1.0"
-
-[license]
-SPDX = "BSD-2-Clause"
+version = "0.1.1"
 
 [deps]
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
