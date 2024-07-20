@@ -14,7 +14,7 @@ if isdir("examples")
         [p.name for p in values(Pkg.dependencies())] &&
             Pkg.rm("ResearchSoftwareMetadata")
         Pkg.update()
-        Pkg.develop(url = "https://github.com/richardreeve/ResearchSoftwareMetadata.jl.git")
+        Pkg.develop(path = ".")
     end
 end
 
@@ -23,7 +23,7 @@ Pkg.activate("docs")
 Pkg.update()
 "ResearchSoftwareMetadata" ∈ [p.name for p in values(Pkg.dependencies())] &&
     Pkg.rm("ResearchSoftwareMetadata")
-Pkg.develop(url = "https://github.com/richardreeve/ResearchSoftwareMetadata.jl.git")
+Pkg.develop(path = ".")
 
 # Reformat files in package
 using JuliaFormatter
