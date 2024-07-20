@@ -21,7 +21,7 @@ built and installed with `add`. For example:
 (@v1.10) pkg> add ResearchSoftwareMetadata
    Resolving package versions...
     Updating `~/.julia/environments/v1.10/Project.toml`
-  [aea672f4] + ResearchSoftwareMetadata v0.1.0
+  [aea672f4] + ResearchSoftwareMetadata v0.1.1
     Updating `~/.julia/environments/v1.10/Manifest.toml`
 
 (@v1.10) pkg>
@@ -34,8 +34,7 @@ First you need to add a small amount of additional metadata into your `Project.t
 To  capture the license you are using and propagate it throughout the metadata files and through your julia code, add an [SPDX license identifier](https://spdx.org/licenses/) to the file:
 
 ```toml
-[license]
-SPDX = "BSD-2-Clause"
+license = "BSD-2-Clause"
 ```
 
 To supplement the metadata on the authors of the package, add the [ORCID](https://orcid.org) for each author and the [ROR](https://ror.org) for the organisation(s) they are affiliated with. You can add as many authors and as much or as little information as you like about each one by adding additional `[[author_details]]` blocks.
