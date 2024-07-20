@@ -4,7 +4,7 @@
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://richardreeve.github.io/ResearchSoftwareMetadata.jl/dev/)
 [![Build Status](https://github.com/richardreeve/ResearchSoftwareMetadata.jl/actions/workflows/testing.yaml/badge.svg?branch=main)](https://github.com/richardreeve/ResearchSoftwareMetadata.jl/actions/workflows/testing.yaml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/richardreeve/ResearchSoftwareMetadata.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/richardreeve/ResearchSoftwareMetadata.jl)
-[![PkgEval](https://JuliaCI.github.io/NanosoldierReports/pkgeval_badges/R/ResearchSoftwareMetadata.svg)](https://JuliaCI.github.io/NanosoldierReports/pkgeval_badges/R/ResearchSoftwareMetadata.html)
+[![DOI](https://zenodo.org/badge/830081076.svg)](https://zenodo.org/doi/10.5281/zenodo.12789179)
 [![ColPrac: Contributor's Guide on Collaborative Practices for Community Packages](https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet)](https://github.com/SciML/ColPrac)
 
 ## Summary
@@ -21,7 +21,7 @@ built and installed with `add`. For example:
 (@v1.10) pkg> add ResearchSoftwareMetadata
    Resolving package versions...
     Updating `~/.julia/environments/v1.10/Project.toml`
-  [aea672f4] + ResearchSoftwareMetadata v0.1.1
+  [aea672f4] + ResearchSoftwareMetadata v0.1.2
     Updating `~/.julia/environments/v1.10/Manifest.toml`
 
 (@v1.10) pkg>
@@ -67,7 +67,7 @@ If you want to add in some additional metadata (the `category` of the software, 
 
 ```julia
 # Add in additional metadata
-ResearchSoftwareMetadata.crosswalk(category = "ecology", keywords = ["julia", "metadata", "research software", "RSMD"])
+ResearchSoftwareMetadata.crosswalk(category = "metadata", keywords = ["julia", "metadata", "research software", "RSMD"])
 
 # Increase version number during crosswalk
 ResearchSoftwareMetadata.increase_patch() # Bump patch version (e.g. 0.4.1 -> 0.4.2)
