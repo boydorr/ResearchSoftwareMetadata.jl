@@ -14,10 +14,10 @@
         "Linux",
         "macOS"
     ],
-    "version": "v0.1.2",
-    "dateModified": "2024-07-20",
+    "version": "v0.1.3",
+    "dateModified": "2024-10-15",
     "datePublished": "2024-07-18",
-    "downloadUrl": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl/archive/refs/tags/v0.1.2.tar.gz",
+    "downloadUrl": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl/archive/refs/tags/v0.1.3.tar.gz",
     "license": "https://spdx.org/licenses/BSD-2-Clause",
     "author": [
         {
