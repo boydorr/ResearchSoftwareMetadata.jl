@@ -1,5 +1,7 @@
 # NEWS
 
+- v0.1.4
+  - More compatibility fixes
 - v0.1.3
   - Fix dependencies
 - v0.1.2
