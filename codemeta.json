@@ -4,11 +4,11 @@
     "applicationCategory": "metadata",
     "programmingLanguage": "julia",
     "developmentStatus": "active",
-    "codeRepository": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl",
+    "codeRepository": "https://github.com/boydorr/ResearchSoftwareMetadata.jl",
     "name": "ResearchSoftwareMetadata.jl",
-    "issueTracker": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl/issues",
-    "readme": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl/blob/main/README.md",
-    "buildInstructions": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl/blob/main/README.md",
+    "issueTracker": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/issues",
+    "readme": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/main/README.md",
+    "buildInstructions": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/main/README.md",
     "dateCreated": "2024-07-17",
     "operatingSystem": [
         "Linux",
@@ -17,7 +17,7 @@
     "version": "v0.1.4",
     "dateModified": "2024-10-16",
     "datePublished": "2024-07-18",
-    "downloadUrl": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl/archive/refs/tags/v0.1.4.tar.gz",
+    "downloadUrl": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/archive/refs/tags/v0.1.4.tar.gz",
     "license": "https://spdx.org/licenses/BSD-2-Clause",
     "author": [
         {
@@ -35,9 +35,9 @@
             ]
         }
     ],
-    "continuousIntegration": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl/actions/workflows/testing.yaml",
+    "continuousIntegration": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/actions/workflows/testing.yaml",
     "codemeta:contIntegration": {
-        "id": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl/actions/workflows/testing.yaml"
+        "id": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/actions/workflows/testing.yaml"
     },
     "keywords": [
         "RSMD",

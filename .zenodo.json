@@ -14,7 +14,7 @@
     "related_identifiers": [
         {
             "scheme": "url",
-            "identifier": "https://github.com/richardreeve/ResearchSoftwareMetadata.jl",
+            "identifier": "https://github.com/boydorr/ResearchSoftwareMetadata.jl",
             "relation": "isOriginalFormOf"
         }
     ],

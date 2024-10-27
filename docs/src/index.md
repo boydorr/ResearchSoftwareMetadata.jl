@@ -4,7 +4,7 @@
 CurrentModule = ResearchSoftwareMetadata
 ```
 
-Documentation for [ResearchSoftwareMetadata](https://github.com/richardreeve/ResearchSoftwareMetadata.jl).
+Documentation for [ResearchSoftwareMetadata](https://github.com/boydorr/ResearchSoftwareMetadata.jl).
 
 ## Summary
 
