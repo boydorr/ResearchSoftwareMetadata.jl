@@ -1,5 +1,7 @@
 # NEWS
 
+- v0.1.5
+  - Can't add license info for Pluto notebooks
 - v0.1.4
   - More compatibility fixes
 - v0.1.3

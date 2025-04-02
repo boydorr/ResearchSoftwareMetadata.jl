@@ -637,7 +637,7 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
                     data = readlines(jl_file)
                     if startswith(data[1], "# SPDX-License-Identifier:")
                         data[1] = "# SPDX-License-Identifier: $(project["license"])"
-                    else
+                    elseif !startswith(data[1], "### A Pluto.jl notebook ###")
                         pushfirst!(data, "")
                         pushfirst!(data,
                                    "# SPDX-License-Identifier: $(project["license"])")
