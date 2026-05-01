@@ -4,7 +4,7 @@
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://boydorr.github.io/ResearchSoftwareMetadata.jl/dev/)
 [![Build Status](https://github.com/boydorr/ResearchSoftwareMetadata.jl/actions/workflows/testing.yaml/badge.svg?branch=main)](https://github.com/boydorr/ResearchSoftwareMetadata.jl/actions/workflows/testing.yaml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/boydorr/ResearchSoftwareMetadata.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/boydorr/ResearchSoftwareMetadata.jl)
-[![DOI](https://zenodo.org/badge/830081076.svg)](https://zenodo.org/doi/10.5281/zenodo.12789179)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12789179.svg)](https://zenodo.org/doi/10.5281/zenodo.12789179)
 [![ColPrac: Contributor's Guide on Collaborative Practices for Community Packages](https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet)](https://github.com/SciML/ColPrac)
 
 ## Summary
