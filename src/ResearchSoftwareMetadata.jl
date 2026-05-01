@@ -100,7 +100,27 @@ function get_organisation_from_ror(ror::String)
 
     if response.status == 200
         data = JSON.parse(String(response.body))
-        d = Dict("name" => data["name"], "ror" => ror, "pid" => data["id"])
+        if haskey(data, "name")
+            name = data["name"]
+        elseif haskey(data, "names") && length(data["names"]) ≥ 1
+            names = [record["value"] for record in data["names"] if "ror_display" in record["types"]]
+            if length(names) ≥ 1
+                name = names[1]
+            else
+                @warn "No display name found for ROR $ror"
+                names = [record["value"] for record in data["names"] if record["lang"] == "en"]
+                if length(names) ≥ 1
+                    name = names[1]
+                else
+                    @info "No English name found for ROR $ror, using first available name"
+                    name = data["names"][1]["value"]
+                end
+            end
+        else
+            @error "No name found for ROR $ror"
+            name = "Unknown"
+        end
+        d = Dict("name" => name, "ror" => ror, "pid" => data["id"])
         return d
     else
         return nothing

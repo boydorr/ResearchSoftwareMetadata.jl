@@ -1,5 +1,7 @@
 # NEWS
 
+- v0.1.6
+  - Update ROR parsing and bump compat
 - v0.1.5
   - Can't add license info for Pluto notebooks
 - v0.1.4
