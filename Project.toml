@@ -14,11 +14,11 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
-DataStructures = "0.16,0.17,0.18"
+DataStructures = "0.16,0.17,0.18,0.19"
 Dates = "1.6"
 Git = "1"
 HTTP = "0.9,1"
-JSON = "0.21"
+JSON = "1"
 Logging = "1"
 TOML = "1"
 YAML = "0.4"
