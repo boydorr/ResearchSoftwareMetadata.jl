@@ -1,5 +1,7 @@
 # NEWS
 
+- v0.1.7
+  - Bump compat and fix workflows
 - v0.1.6
   - Update ROR parsing and bump compat
 - v0.1.5
