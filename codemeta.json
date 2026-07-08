@@ -14,10 +14,10 @@
         "Linux",
         "macOS"
     ],
-    "version": "v0.1.7",
-    "dateModified": "2026-07-07",
+    "version": "v0.2.0",
+    "dateModified": "2026-07-09",
     "datePublished": "2024-07-18",
-    "downloadUrl": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/archive/refs/tags/v0.1.7.tar.gz",
+    "downloadUrl": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/archive/refs/tags/v0.2.0.tar.gz",
     "license": "https://spdx.org/licenses/BSD-2-Clause",
     "author": [
         {
@@ -44,5 +44,6 @@
         "julia",
         "metadata",
         "research software"
-    ]
+    ],
+    "description": "Research Software metadata crosswalk between Project.toml, codemeta.json, .zenodo.json and LICENSE to provide consistent metadata"
 }

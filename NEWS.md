@@ -1,5 +1,12 @@
 # NEWS
 
+- v0.2.0
+  - Include authors without ORCIDs in codemeta.json and .zenodo.json
+  - Handle missing ORCID and ROR records without crashing
+  - Fail on connection errors and unexpected HTTP statuses, writing no files so everything is left in its original state
+  - Add optional top-level Project.toml keys description, keywords, category, development_status and publications as the source for codemeta.json and .zenodo.json, backfilling them from codemeta.json when absent
+  - Split the source into separate files and export crosswalk, increase_patch, increase_minor, increase_major
+  - Construct a missing author_details section in Project.toml from the authors field and codemeta.json or .zenodo.json when consistent with authors
 - v0.1.7
   - Bump compat and fix workflows
 - v0.1.6
