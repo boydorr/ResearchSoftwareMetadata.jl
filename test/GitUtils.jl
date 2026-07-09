@@ -55,7 +55,7 @@ function is_repo_clean(repo_path; strict = false)
     @info msg
 
     is_clean = isempty(dirty)
-    is_clean || @error "Repository not clean:\n" * join(dirty, "\n") * join(readlines(`$(Git.git()) diff $repo_path`), "\n")
+    is_clean || @error "Repository not clean:\n" * join(dirty, "\n")
 
     return is_clean
 end

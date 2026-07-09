@@ -10,11 +10,11 @@ Julia's General registry, GitHub and Zenodo, following the FAIR-IMPACT
 Research Software MetaData (RSMD) guidelines. `Project.toml` is treated
 as the authoritative source of metadata wherever possible.
 
-The exported entry points are [`ResearchSoftwareMetadatacrosswalk`](@ref),
+The entry points are [`ResearchSoftwareMetadata.crosswalk()`](@ref),
 which enforces consistency across the metadata files and the julia source
-code, and [`ResearchSoftwareMetadata.increase_patch`](@ref),
-[`ResearchSoftwareMetadata.increase_minor`](@ref) and
-[`ResearchSoftwareMetadata.increase_major`](@ref), which bump the package
+code, and [`ResearchSoftwareMetadata.increase_patch()`](@ref),
+[`ResearchSoftwareMetadata.increase_minor()`](@ref) and
+[`ResearchSoftwareMetadata.increase_major()`](@ref), which bump the package
 version and then re-run the crosswalk.
 """
 module ResearchSoftwareMetadata
