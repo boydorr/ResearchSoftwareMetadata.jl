@@ -33,19 +33,31 @@ First you need to add a small amount of additional metadata into your `Project.t
 To  capture the license you are using and propagate it throughout the metadata files and through your julia code, add an [SPDX license identifier](https://spdx.org/licenses/) to the file:
 
 ```toml
-[license]
-SPDX = "BSD-2-Clause"
+license = "BSD-2-Clause"
 ```
 
-To supplement the metadata on the authors of the package, add the [ORCID](https://orcid.org) for each author and the [ROR](https://ror.org) for the organisation(s) they are affiliated with. You can add as many authors and as much or as little information as you like about each one by adding additional `[[author_details]]` blocks.
+All of the other metadata that this package uses lives in a single `[rsmd]` table. To supplement the metadata on the authors of the package, add the [ORCID](https://orcid.org) for each author and the [ROR](https://ror.org) for the organisation(s) they are affiliated with. You can add as many authors and as much or as little information as you like about each one by adding additional `[[rsmd.author_details]]` blocks.
 
 ```toml
-[[author_details]]
-name = "Richard Reeve"
-orcid = "0000-0003-2589-8091"
+[rsmd]
 
-    [[author_details.affiliation]]
-    ror = "00vtgdb53"
+    [[rsmd.author_details]]
+    name = "Richard Reeve"
+    orcid = "0000-0003-2589-8091"
+
+        [[rsmd.author_details.affiliation]]
+        ror = "00vtgdb53"
+```
+
+You can also optionally add a `description` of the package, `keywords` associated with it, the software `category` it belongs to, its [repostatus.org](https://www.repostatus.org) `development_status`, and the DOIs of any `publications` associated with the package. All of these are propagated into `codemeta.json` and `.zenodo.json`, and any values already in `codemeta.json` but missing from `Project.toml` will be backfilled into it. Any of these keys found at the top level of `Project.toml` (the old layout) are automatically migrated into `[rsmd]`:
+
+```toml
+[rsmd]
+keywords = ["julia", "metadata"]
+category = "metadata"
+description = "A package that does things"
+development_status = "active"
+publications = ["10.5281/zenodo.12789179"]
 ```
 
 Then, from the root of your package, you can just run a crosswalk:

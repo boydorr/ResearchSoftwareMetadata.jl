@@ -18,9 +18,9 @@ makedocs(;
          format = Documenter.HTML(;
                                   canonical = "https://boydorr.github.io/ResearchSoftwareMetadata.jl",
                                   edit_link = "main",
-                                  assets = String[],),
-         pages = ["Home" => "index.md"],)
+                                  assets = String[]),
+         pages = ["Home" => "index.md"])
 
 deploydocs(;
            repo = "github.com/boydorr/ResearchSoftwareMetadata.jl",
-           devbranch = "main",)
+           devbranch = "main")

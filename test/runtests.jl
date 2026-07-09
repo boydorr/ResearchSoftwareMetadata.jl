@@ -168,8 +168,8 @@ end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
         cd(git_dir) # crosswalk leaves the working directory changed
         project = TOML.parsefile(joinpath(dir, "Project.toml"))
-        @test haskey(project, "author_details")
-        detail = project["author_details"][1]
+        @test haskey(project["rsmd"], "author_details")
+        detail = project["rsmd"]["author_details"][1]
         @test detail["name"] == "Ann B Smith"
         @test detail["email"] == "ann@example.com"
         @test detail["affiliation"][1]["name"] == "Example University"
@@ -195,7 +195,7 @@ end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
         cd(git_dir) # crosswalk leaves the working directory changed
         project = TOML.parsefile(joinpath(dir, "Project.toml"))
-        detail = project["author_details"][1]
+        detail = project["rsmd"]["author_details"][1]
         @test detail["name"] == "Ann B Smith"
         @test !haskey(detail, "email")
         @test detail["affiliation"][1]["name"] == "Example University"
@@ -220,7 +220,7 @@ end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
         cd(git_dir) # crosswalk leaves the working directory changed
         project = TOML.parsefile(joinpath(dir, "Project.toml"))
-        @test project["author_details"] ==
+        @test project["rsmd"]["author_details"] ==
               [Dict("name" => "Ann B Smith", "email" => "ann@example.com")]
         # authors is definitive, so the inconsistent codemeta author goes
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
@@ -246,7 +246,7 @@ end
         project = TOML.parsefile(toml)
         @test project["authors"] ==
               ["Ann B Smith <ann@example.com>", "Bob Jones <bob@example.com>"]
-        details = project["author_details"]
+        details = project["rsmd"]["author_details"]
         @test length(details) == 2
         @test details[2]["name"] == "Bob Jones"
         @test details[2]["email"] == "bob@example.com"
@@ -277,11 +277,11 @@ end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
         cd(git_dir) # crosswalk leaves the working directory changed
         project = TOML.parsefile(joinpath(dir, "Project.toml"))
-        @test project["description"] == "A fixture package"
-        @test project["keywords"] == ["fixture", "metadata"]
-        @test project["category"] == "metadata"
+        @test project["rsmd"]["description"] == "A fixture package"
+        @test project["rsmd"]["keywords"] == ["fixture", "metadata"]
+        @test project["rsmd"]["category"] == "metadata"
         # Defaults are not backfilled into Project.toml
-        @test !haskey(project, "development_status")
+        @test !haskey(project["rsmd"], "development_status")
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test codemeta["developmentStatus"] == "active"
     end
