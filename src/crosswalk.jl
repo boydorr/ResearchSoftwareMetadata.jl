@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 """
-    crosswalk(; category = nothing, keywords = nothing, build = false)
+    crosswalk(git_dir; category = nothing, keywords = nothing,
+              build = false, update = false)
 
 Runs a crosswalk across `Project.toml`, `LICENSE`, `codemeta.json` and `.zenodo.json` as
 well as the julia source files to enforce consistency between the different metadata formats.

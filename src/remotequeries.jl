@@ -54,12 +54,15 @@ function get_organisation_from_ror(ror::String)
         if haskey(data, "name")
             name = data["name"]
         elseif haskey(data, "names") && length(data["names"]) ≥ 1
-            names = [record["value"] for record in data["names"] if "ror_display" in record["types"]]
+            names = [record["value"]
+                     for record in data["names"]
+                     if "ror_display" in record["types"]]
             if length(names) ≥ 1
                 name = names[1]
             else
                 @warn "No display name found for ROR $ror"
-                names = [record["value"] for record in data["names"] if record["lang"] == "en"]
+                names = [record["value"]
+                         for record in data["names"] if record["lang"] == "en"]
                 if length(names) ≥ 1
                     name = names[1]
                 else

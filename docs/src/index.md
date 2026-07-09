@@ -9,7 +9,7 @@ Documentation for [ResearchSoftwareMetadata](https://github.com/boydorr/Research
 ## Summary
 
 **ResearchSoftwareMetadata** is a [Julia](http://www.julialang.org) package that
-provides functionality for to allow a crosswalk between Project.toml, codemeta.json, .zenodo.json and the package LICENSE file to allow a consistent way of providing metadata for research software which allows the Julia General Registry to pick up the same metadata as GitHub and Zenodo while following the Research Software MetaData [guidelines](https://fair-impact.github.io/RSMD-guidelines/).
+provides a crosswalk between `Project.toml`, `codemeta.json`, `.zenodo.json` and the package `LICENSE` file, giving a consistent way of providing metadata for research software, so that the Julia General Registry, GitHub and Zenodo all pick up the same metadata, following the Research Software MetaData [guidelines](https://fair-impact.github.io/RSMD-guidelines/).
 
 ## Installation
 
@@ -17,13 +17,13 @@ The package is registered in the `General` registry so can be
 built and installed with `add`. For example:
 
 ```julia
-(@v1.10) pkg> add ResearchSoftwareMetadata
+(@v1.12) pkg> add ResearchSoftwareMetadata
    Resolving package versions...
-    Updating `~/.julia/environments/v1.10/Project.toml`
-  [aea672f4] + ResearchSoftwareMetadata v0.1.0
-    Updating `~/.julia/environments/v1.10/Manifest.toml`
+    Updating `~/.julia/environments/v1.12/Project.toml`
+  [58378933] + ResearchSoftwareMetadata v0.3.0
+    Updating `~/.julia/environments/v1.12/Manifest.toml`
 
-(@v1.10) pkg>
+(@v1.12) pkg>
 ```
 
 ## Usage
@@ -75,19 +75,19 @@ ResearchSoftwareMetadata.crosswalk()
 ```
 
 
-If you want to add in some additional metadata (the `category` of the software, or the `keywords` associated with it, or you want to increase the package version during the crosswalk, this is possible as follows:
+If you want to pass in some additional metadata (the `category` of the software, or the `keywords` associated with it, both of which are written back into `[rsmd]` in `Project.toml`), or you want to increase the package version during the crosswalk, you can do that as follows:
 
 ```julia
 # Add in additional metadata
-ResearchSoftwareMetadata.crosswalk(category = "ecology", keywords = ["julia", "metadata", "research software", "RSMD"])
+ResearchSoftwareMetadata.crosswalk(category = "metadata", keywords = ["julia", "metadata", "research software", "RSMD"])
 
 # Increase version number during crosswalk
 ResearchSoftwareMetadata.increase_patch() # Bump patch version (e.g. 0.4.1 -> 0.4.2)
-ResearchSoftwareMetadata.increase_minor() # Bump minor version (e.g. 0.4.1 -> 0.5.0)
-ResearchSoftwareMetadata.increase_major() # Bump major version (e.g. 0.4.1 -> 1.0.0)
+ResearchSoftwareMetadata.increase_minor() # Bump minor version (e.g. 0.4.2 -> 0.5.0)
+ResearchSoftwareMetadata.increase_major() # Bump major version (e.g. 0.5.0 -> 1.0.0)
 ```
 
-You might also consider reformatting all of your julia code to a consistent format. A `.JuliaJormatter.toml` file in the package root defines what the formatting standard should be.
+You might also consider reformatting all of your julia code to a consistent format. A `.JuliaFormatter.toml` file in the package root defines what the formatting standard should be.
 
 ```julia
 Pkg.add("JuliaFormatter")
