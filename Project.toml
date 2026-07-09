@@ -1,7 +1,7 @@
 name = "ResearchSoftwareMetadata"
 uuid = "58378933-4625-47fa-851e-05ee27d397bd"
 license = "MIT"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Richard Reeve <richard.reeve@glasgow.ac.uk>"]
 
 [deps]
@@ -14,7 +14,7 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
-DataStructures = "0.19"
+DataStructures = "0.17,0.18,0.19"
 Dates = "1.6"
 Git = "1"
 HTTP = "1,2"

@@ -1,5 +1,7 @@
 # NEWS
 
+- v0.3.1
+  - Dependency fix to avoid updating other packages
 - v0.3.0
   - Move the RSMD-specific Project.toml keys (description, keywords, category, development_status, publications and author_details) into a single [rsmd] table, migrating legacy top-level keys there automatically
   - Write Project.toml in Pkg's canonical key order, applied recursively to nested tables, so Pkg operations like add and rm no longer reorder the file
