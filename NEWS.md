@@ -3,7 +3,9 @@
 - v0.3.0
   - Move the RSMD-specific Project.toml keys (description, keywords, category, development_status, publications and author_details) into a single [rsmd] table, migrating legacy top-level keys there automatically
   - Write Project.toml in Pkg's canonical key order, applied recursively to nested tables, so Pkg operations like add and rm no longer reorder the file
-  - Fix errors and stale examples in the README and documentation
+  - Fix errors and stale examples in the README and documentation, and problem with propagating updates
+  - Add in demo tests for other packages to adopt and explain how to use them.
+  - Update license to MIT to make adopting tests in other packages simpler
 - v0.2.0
   - Include authors without ORCIDs in codemeta.json and .zenodo.json
   - Handle missing ORCID and ROR records without crashing
