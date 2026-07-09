@@ -1,5 +1,6 @@
 {
     "title": "ResearchSoftwareMetadata.jl",
+    "description": "Research Software metadata crosswalk between Project.toml, codemeta.json, .zenodo.json and LICENSE to provide consistent metadata",
     "upload_type": "software",
     "creators": [
         {

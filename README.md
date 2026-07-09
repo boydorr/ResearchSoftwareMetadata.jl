@@ -18,13 +18,13 @@ The package is registered in the `General` registry so can be
 built and installed with `add`. For example:
 
 ```julia
-(@v1.10) pkg> add ResearchSoftwareMetadata
+(@v1.12) pkg> add ResearchSoftwareMetadata
    Resolving package versions...
-    Updating `~/.julia/environments/v1.10/Project.toml`
-  [aea672f4] + ResearchSoftwareMetadata v0.1.2
-    Updating `~/.julia/environments/v1.10/Manifest.toml`
+    Updating `~/.julia/environments/v1.12/Project.toml`
+  [aea672f4] + ResearchSoftwareMetadata v0.2.0
+    Updating `~/.julia/environments/v1.12/Manifest.toml`
 
-(@v1.10) pkg>
+(@v1.12) pkg>
 ```
 
 ## Usage
@@ -46,6 +46,16 @@ orcid = "0000-0003-2589-8091"
 
     [[author_details.affiliation]]
     ror = "00vtgdb53"
+```
+
+You can also optionally add a `description` of the package, `keywords` associated with it, the software `category` it belongs to, its [repostatus.org](https://www.repostatus.org) `development_status`, and the DOIs of any `publications` associated with the package. All of these are propagated into `codemeta.json` and `.zenodo.json`, and any values already in `codemeta.json` but missing from `Project.toml` will be backfilled into it:
+
+```toml
+description = "A package that does things"
+keywords = ["julia", "metadata"]
+category = "metadata"
+development_status = "active"
+publications = ["10.5281/zenodo.12789179"]
 ```
 
 Then, from the root of your package, you can just run a crosswalk:
@@ -70,8 +80,8 @@ ResearchSoftwareMetadata.crosswalk(category = "metadata", keywords = ["julia", "
 
 # Increase version number during crosswalk
 ResearchSoftwareMetadata.increase_patch() # Bump patch version (e.g. 0.4.1 -> 0.4.2)
-ResearchSoftwareMetadata.increase_minor() # Bump minor version (e.g. 0.4.1 -> 0.5.0)
-ResearchSoftwareMetadata.increase_major() # Bump major version (e.g. 0.4.1 -> 1.0.0)
+ResearchSoftwareMetadata.increase_minor() # Bump minor version (e.g. 0.4.2 -> 0.5.0)
+ResearchSoftwareMetadata.increase_major() # Bump major version (e.g. 0.5.0 -> 1.0.0)
 ```
 
 You might also consider reformatting all of your julia code to a consistent format. A `.JuliaFormatter.toml` file in the package root defines what the formatting standard should be.
