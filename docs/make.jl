@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: BSD-2-Clause
+# SPDX-License-Identifier: MIT
 
 using Pkg
 "ResearchSoftwareMetadata" ∈ [p.name for p in values(Pkg.dependencies())] &&
@@ -18,9 +18,10 @@ makedocs(;
          format = Documenter.HTML(;
                                   canonical = "https://boydorr.github.io/ResearchSoftwareMetadata.jl",
                                   edit_link = "main",
-                                  assets = String[],),
-         pages = ["Home" => "index.md"],)
+                                  assets = String[]),
+         pages = ["Home" => "index.md",
+             "Automated package checks" => "testing.md"])
 
 deploydocs(;
            repo = "github.com/boydorr/ResearchSoftwareMetadata.jl",
-           devbranch = "main",)
+           devbranch = "main")

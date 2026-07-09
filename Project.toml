@@ -1,12 +1,8 @@
 name = "ResearchSoftwareMetadata"
 uuid = "58378933-4625-47fa-851e-05ee27d397bd"
-license = "BSD-2-Clause"
-description = "Research Software metadata crosswalk between Project.toml, codemeta.json, .zenodo.json and LICENSE to provide consistent metadata"
-keywords = ["RSMD", "julia", "metadata", "research software"]
-category = "metadata"
-development_status = "active"
+license = "MIT"
+version = "0.3.0"
 authors = ["Richard Reeve <richard.reeve@glasgow.ac.uk>"]
-version = "0.2.0"
 
 [deps]
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
@@ -23,25 +19,33 @@ Dates = "1.6"
 Git = "1"
 HTTP = "1,2"
 JSON = "1"
+JuliaFormatter = "2"
 Logging = "1"
 TOML = "1"
 YAML = "0.4"
 julia = "1.10"
 
-[[author_details]]
-name = "Richard Reeve"
-orcid = "0000-0003-2589-8091"
-email = "richard.reeve@glasgow.ac.uk"
-
-    [[author_details.affiliation]]
-    ror = "00vtgdb53"
-
 [extras]
 Git = "d7ba0133-e1db-5d97-8f8c-041e4b3a1eb2"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+JuliaFormatter = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
+[rsmd]
+keywords = ["RSMD", "julia", "metadata", "research software"]
+category = "metadata"
+description = "Research Software metadata crosswalk between Project.toml, codemeta.json, .zenodo.json and LICENSE to provide consistent metadata"
+development_status = "active"
+
+    [[rsmd.author_details]]
+    name = "Richard Reeve"
+    email = "richard.reeve@glasgow.ac.uk"
+    orcid = "0000-0003-2589-8091"
+
+        [[rsmd.author_details.affiliation]]
+        ror = "00vtgdb53"
+
 [targets]
-test = ["Test", "Git", "JSON", "Logging", "TOML"]
+test = ["Test", "Git", "JSON", "JuliaFormatter", "Logging", "TOML"]

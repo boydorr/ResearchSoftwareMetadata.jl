@@ -10,7 +10,7 @@
 ## Summary
 
 **ResearchSoftwareMetadata** is a [Julia](http://www.julialang.org) package that
-provides functionality for to allow a crosswalk between Project.toml, codemeta.json, .zenodo.json and the package LICENSE file to allow a consistent way of providing metadata for research software which allows the Julia General Registry to pick up the same metadata as GitHub and Zenodo while following the Research Software MetaData [guidelines](https://fair-impact.github.io/RSMD-guidelines/).
+provides a crosswalk between `Project.toml`, `codemeta.json`, `.zenodo.json` and the package `LICENSE` file, giving a consistent way of providing metadata for research software, so that the Julia General Registry, GitHub and Zenodo all pick up the same metadata, following the Research Software MetaData [guidelines](https://fair-impact.github.io/RSMD-guidelines/).
 
 ## Installation
 
@@ -21,7 +21,7 @@ built and installed with `add`. For example:
 (@v1.12) pkg> add ResearchSoftwareMetadata
    Resolving package versions...
     Updating `~/.julia/environments/v1.12/Project.toml`
-  [aea672f4] + ResearchSoftwareMetadata v0.2.0
+  [58378933] + ResearchSoftwareMetadata v0.3.0
     Updating `~/.julia/environments/v1.12/Manifest.toml`
 
 (@v1.12) pkg>
@@ -37,23 +37,26 @@ To  capture the license you are using and propagate it throughout the metadata f
 license = "BSD-2-Clause"
 ```
 
-To supplement the metadata on the authors of the package, add the [ORCID](https://orcid.org) for each author and the [ROR](https://ror.org) for the organisation(s) they are affiliated with. You can add as many authors and as much or as little information as you like about each one by adding additional `[[author_details]]` blocks.
+All of the other metadata that this package uses lives in a single `[rsmd]` table. To supplement the metadata on the authors of the package, add the [ORCID](https://orcid.org) for each author and the [ROR](https://ror.org) for the organisation(s) they are affiliated with. You can add as many authors and as much or as little information as you like about each one by adding additional `[[rsmd.author_details]]` blocks.
 
 ```toml
-[[author_details]]
-name = "Richard Reeve"
-orcid = "0000-0003-2589-8091"
+[rsmd]
 
-    [[author_details.affiliation]]
-    ror = "00vtgdb53"
+    [[rsmd.author_details]]
+    name = "Richard Reeve"
+    orcid = "0000-0003-2589-8091"
+
+        [[rsmd.author_details.affiliation]]
+        ror = "00vtgdb53"
 ```
 
-You can also optionally add a `description` of the package, `keywords` associated with it, the software `category` it belongs to, its [repostatus.org](https://www.repostatus.org) `development_status`, and the DOIs of any `publications` associated with the package. All of these are propagated into `codemeta.json` and `.zenodo.json`, and any values already in `codemeta.json` but missing from `Project.toml` will be backfilled into it:
+You can also optionally add a `description` of the package, `keywords` associated with it, the software `category` it belongs to, its [repostatus.org](https://www.repostatus.org) `development_status`, and the DOIs of any `publications` associated with the package. All of these are propagated into `codemeta.json` and `.zenodo.json`, and any values already in `codemeta.json` but missing from `Project.toml` will be backfilled into it. Any of these keys found at the top level of `Project.toml` (the old layout) are automatically migrated into `[rsmd]`:
 
 ```toml
-description = "A package that does things"
+[rsmd]
 keywords = ["julia", "metadata"]
 category = "metadata"
+description = "A package that does things"
 development_status = "active"
 publications = ["10.5281/zenodo.12789179"]
 ```
@@ -72,7 +75,7 @@ using ResearchSoftwareMetadata
 ResearchSoftwareMetadata.crosswalk()
 ```
 
-If you want to add in some additional metadata (the `category` of the software, or the `keywords` associated with it, or you want to increase the package version during the crosswalk, this is possible as follows:
+If you want to pass in some additional metadata (the `category` of the software, or the `keywords` associated with it, both of which are written back into `[rsmd]` in `Project.toml`), or you want to increase the package version during the crosswalk, you can do that as follows:
 
 ```julia
 # Add in additional metadata
@@ -93,3 +96,7 @@ using JuliaFormatter
 using MyPackage
 format(MyPackage)
 ```
+
+## Automated checking
+
+You can also make your package's own test suite check automatically that the metadata crosswalk is clean and the code is well formatted, by copying a few files from this package's `test/` directory into your own. See [Automated package checks](https://boydorr.github.io/ResearchSoftwareMetadata.jl/stable/testing/) in the documentation for instructions.

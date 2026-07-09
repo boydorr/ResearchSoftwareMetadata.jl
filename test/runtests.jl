@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: BSD-2-Clause
+# SPDX-License-Identifier: MIT
 
 using Git
 using JSON
@@ -10,13 +10,10 @@ using Test
 include("GitUtils.jl")
 using .GitUtils
 
-@testset "ResearchSoftwareMetadata.jl" begin
+@testset "Version bumping" begin
     git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     project = ResearchSoftwareMetadata.read_project()
-    @test isnothing(ResearchSoftwareMetadata.crosswalk())
     @test_nowarn global_logger(SimpleLogger(stderr, Logging.Warn))
-    @test_nowarn ResearchSoftwareMetadata.crosswalk()
-    @test is_repo_clean(git_dir)
     @test_nowarn ResearchSoftwareMetadata.increase_patch()
     @test_nowarn ResearchSoftwareMetadata.increase_minor()
     @test_nowarn ResearchSoftwareMetadata.increase_major()
@@ -168,8 +165,8 @@ end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
         cd(git_dir) # crosswalk leaves the working directory changed
         project = TOML.parsefile(joinpath(dir, "Project.toml"))
-        @test haskey(project, "author_details")
-        detail = project["author_details"][1]
+        @test haskey(project["rsmd"], "author_details")
+        detail = project["rsmd"]["author_details"][1]
         @test detail["name"] == "Ann B Smith"
         @test detail["email"] == "ann@example.com"
         @test detail["affiliation"][1]["name"] == "Example University"
@@ -195,7 +192,7 @@ end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
         cd(git_dir) # crosswalk leaves the working directory changed
         project = TOML.parsefile(joinpath(dir, "Project.toml"))
-        detail = project["author_details"][1]
+        detail = project["rsmd"]["author_details"][1]
         @test detail["name"] == "Ann B Smith"
         @test !haskey(detail, "email")
         @test detail["affiliation"][1]["name"] == "Example University"
@@ -220,7 +217,7 @@ end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
         cd(git_dir) # crosswalk leaves the working directory changed
         project = TOML.parsefile(joinpath(dir, "Project.toml"))
-        @test project["author_details"] ==
+        @test project["rsmd"]["author_details"] ==
               [Dict("name" => "Ann B Smith", "email" => "ann@example.com")]
         # authors is definitive, so the inconsistent codemeta author goes
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
@@ -246,7 +243,7 @@ end
         project = TOML.parsefile(toml)
         @test project["authors"] ==
               ["Ann B Smith <ann@example.com>", "Bob Jones <bob@example.com>"]
-        details = project["author_details"]
+        details = project["rsmd"]["author_details"]
         @test length(details) == 2
         @test details[2]["name"] == "Bob Jones"
         @test details[2]["email"] == "bob@example.com"
@@ -277,13 +274,62 @@ end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
         cd(git_dir) # crosswalk leaves the working directory changed
         project = TOML.parsefile(joinpath(dir, "Project.toml"))
-        @test project["description"] == "A fixture package"
-        @test project["keywords"] == ["fixture", "metadata"]
-        @test project["category"] == "metadata"
+        @test project["rsmd"]["description"] == "A fixture package"
+        @test project["rsmd"]["keywords"] == ["fixture", "metadata"]
+        @test project["rsmd"]["category"] == "metadata"
         # Defaults are not backfilled into Project.toml
-        @test !haskey(project, "development_status")
+        @test !haskey(project["rsmd"], "development_status")
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test codemeta["developmentStatus"] == "active"
+    end
+end
+
+@testset "Propagate Project.toml changes with update" begin
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    extra = """
+            description = "A fixture package"
+            category = "metadata"
+            """
+    # With update = true, deliberate Project.toml changes propagate with @info
+    mktempdir() do dir
+        make_fixture(dir, extra = extra)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir, build = true))
+        cd(git_dir) # crosswalk leaves the working directory changed
+        toml = joinpath(dir, "Project.toml")
+        project = TOML.parsefile(toml)
+        project["license"] = "BSD-2-Clause"
+        project["rsmd"]["description"] = "An updated fixture package"
+        open(toml, "w") do io
+            return TOML.print(io, project)
+        end
+        @test_nowarn ResearchSoftwareMetadata.crosswalk(dir, update = true)
+        cd(git_dir)
+        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+        @test codemeta["license"] == "https://spdx.org/licenses/BSD-2-Clause"
+        @test codemeta["description"] == "An updated fixture package"
+        zenodo = JSON.parsefile(joinpath(dir, ".zenodo.json"))
+        @test zenodo["license"] == "BSD-2-Clause"
+        @test zenodo["description"] == "An updated fixture package"
+        @test occursin("Redistribution",
+                       read(joinpath(dir, "LICENSE"), String))
+        src = readlines(joinpath(dir, "src", "RSMDFixture.jl"))
+        @test src[1] == "# SPDX-License-Identifier: BSD-2-Clause"
+    end
+    # Without update, a license mismatch is an error and is not propagated
+    mktempdir() do dir
+        make_fixture(dir, extra = extra)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir, build = true))
+        cd(git_dir) # crosswalk leaves the working directory changed
+        toml = joinpath(dir, "Project.toml")
+        project = TOML.parsefile(toml)
+        project["license"] = "BSD-2-Clause"
+        open(toml, "w") do io
+            return TOML.print(io, project)
+        end
+        @test_logs (:error, r"License mismatch") match_mode=:any ResearchSoftwareMetadata.crosswalk(dir)
+        cd(git_dir)
+        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+        @test codemeta["license"] == "https://spdx.org/licenses/MIT"
     end
 end
 
@@ -302,18 +348,31 @@ end
         @test !isfile(joinpath(dir, ".zenodo.json"))
         @test !isfile(joinpath(dir, "LICENSE"))
     end
+end
 
-    # Does not currently work on Windows runners on GitHub due to file writing issues
-    if !haskey(ENV, "RUNNER_OS") || ENV["RUNNER_OS"] ≠ "Windows"
-        @testset "RSMD" begin
-            git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
-            @test isnothing(ResearchSoftwareMetadata.crosswalk())
-            global_logger(SimpleLogger(stderr, Logging.Warn))
-            @test_nowarn ResearchSoftwareMetadata.crosswalk()
-            global_logger(SimpleLogger(stderr, Logging.Info))
-            @test is_repo_clean(git_dir; strict = haskey(ENV, "RUNNER_OS"))
+rsmd = get(ENV, "RSMD_CROSSWALK", "FALSE")
+if rsmd == "TRUE" || !haskey(ENV, "RUNNER_OS") # Crosswalk runner or local testing
+    # Test RSMD crosswalk and other hygiene issues
+
+    # Identify files that are checking package hygiene; use @__DIR__ because
+    # crosswalk() in earlier testsets leaves the working directory changed
+    cleanbase = map(file -> replace(file, r"clean_(.*).jl$" => s"\1"),
+                    filter(str -> occursin(r"^clean_.*\.jl$", str),
+                           readdir(@__DIR__)))
+
+    if length(cleanbase) > 0
+        @info "Crosswalk and clean testing:"
+        @testset begin
+            for c in cleanbase
+                println("    = $c")
+            end
+            println()
+
+            @testset for c in cleanbase
+                fn = "clean_$c.jl"
+                println("    * Verifying $c.jl ...")
+                include(fn)
+            end
         end
-    else
-        @test_broken !haskey(ENV, "RUNNER_OS") || ENV["RUNNER_OS"] ≠ "Windows"
     end
 end

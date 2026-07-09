@@ -1,26 +1,30 @@
-# SPDX-License-Identifier: BSD-2-Clause
+# SPDX-License-Identifier: MIT
 
 """
-    crosswalk(; category = nothing, keywords = nothing, build = false)
+    crosswalk(git_dir; category = nothing, keywords = nothing,
+              build = false, update = false)
 
 Runs a crosswalk across `Project.toml`, `LICENSE`, `codemeta.json` and `.zenodo.json` as
 well as the julia source files to enforce consistency between the different metadata formats.
 It logs warnings and errors if it identifies inconsistencies while it is editing the files.
 `Project.toml` is the authoritative source of metadata: as well as its standard fields, the
-optional top-level keys `description`, `keywords`, `category`, `development_status` and
-`publications` (a vector of DOIs of associated papers) are propagated into `codemeta.json`
-and `.zenodo.json`; values found only in `codemeta.json` are backfilled into `Project.toml`.
+optional keys `description`, `keywords`, `category`, `development_status` and
+`publications` (a vector of DOIs of associated papers) in its `[rsmd]` table are propagated
+into `codemeta.json` and `.zenodo.json`; values found only in `codemeta.json` are backfilled
+into `Project.toml`. Legacy top-level copies of these keys are migrated into `[rsmd]`.
 A missing `author_details` section is likewise constructed from `codemeta.json` or
 `.zenodo.json`, provided the information there is consistent with the definitive `authors`
-field. New entries in `authors` are propagated into `author_details` (with a warning to add
-their ORCID and ROR affiliation there), `codemeta.json` and `.zenodo.json`, while authors in
-`codemeta.json` that are missing from `authors` are removed with an error.
+field. New entries in `authors` are propagated into `rsmd.author_details` (with a warning to
+add their ORCID and ROR affiliation there), `codemeta.json` and `.zenodo.json`, while authors
+in `codemeta.json` that are missing from `authors` are removed with an error.
 The software category can be set with the `category` argument, likewise the `keywords`
 argument can contain a vector of keyword strings; both take precedence over and are written
 back into `Project.toml`. The `build` argument sets the `buildInstructions` RSMD
 field - `false` leaves the instructions as is, `true` sets it to the same as the README,
-and a string sets it to that value. If `update` is true, mismatches between version numbers in
-`codemeta.json` are accepted. If any remote metadata query (orcid.org, ror.org, spdx.org,
+and a string sets it to that value. If `update` is true, changes to `Project.toml` (e.g. to
+the version or the license) are treated as deliberate and propagated to the other metadata
+files with `@info` messages instead of being reported as warnings or errors.
+If any remote metadata query (orcid.org, ror.org, spdx.org,
 doi.org or Julia's General registry) cannot be completed, the crosswalk throws an error and
 all files are left in their original state.
 """
@@ -28,6 +32,7 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
                    category = nothing, keywords = nothing, build = false,
                    update = false)
     project = read_project(git_dir)
+    rsmd = get!(project, "rsmd", OrderedDict{String, Any}())
     proj_version = VersionNumber(project["version"])
 
     now = string(today())
@@ -55,14 +60,15 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
 
     codemeta["@context"] = "https://w3id.org/codemeta/3.0"
     codemeta["type"] = "SoftwareSourceCode"
-    isnothing(reconcile!(project, codemeta, "category", "applicationCategory",
-                         value = category)) &&
-        @warn "No category metadata, add `category` to Project.toml"
+    isnothing(reconcile!(rsmd, codemeta, "category", "applicationCategory",
+                         value = category, update = update)) &&
+        @warn "No category metadata, add `category` to [rsmd] in Project.toml"
     codemeta["programmingLanguage"] = "julia"
-    reconcile!(project, codemeta, "development_status", "developmentStatus",
-               default = "active")
-    isnothing(reconcile!(project, codemeta, "description", "description")) &&
-        @warn "No description metadata, add `description` to Project.toml"
+    reconcile!(rsmd, codemeta, "development_status", "developmentStatus",
+               default = "active", update = update)
+    isnothing(reconcile!(rsmd, codemeta, "description", "description",
+                         update = update)) &&
+        @warn "No description metadata, add `description` to [rsmd] in Project.toml"
 
     repo_index = "origin" ∈ remotes ?
                  repo_index = findfirst(==("origin"), remotes) : 1
@@ -184,7 +190,7 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     codemeta["downloadUrl"] = urls[repo_index] * "/archive/refs/tags/" *
                               codemeta["version"] * ".tar.gz"
 
-    if !haskey(project, "author_details")
+    if !haskey(rsmd, "author_details")
         details = nothing
         source = nothing
         if !isempty(get(codemeta, "author", []))
@@ -202,7 +208,7 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
             if author_details_consistent(details, project["authors"])
                 @info "Reconstructing author_details in Project.toml " *
                       "from $source"
-                project["author_details"] = details
+                rsmd["author_details"] = details
             else
                 @error "Authors in $source are inconsistent with authors " *
                        "in Project.toml, rebuilding author_details from " *
@@ -214,8 +220,8 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     authors = String[]
     author_data = []
     orcid_people = Dict{String, Any}()
-    if haskey(project, "author_details")
-        for author in project["author_details"]
+    if haskey(rsmd, "author_details")
+        for author in rsmd["author_details"]
             person = nothing
             if haskey(author, "orcid")
                 person = get_person_from_orcid(author["orcid"])
@@ -255,22 +261,22 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
             isnothing(email) || (detail["email"] = email)
             push!(author_data, detail)
         end
-        project["author_details"] = author_data
+        rsmd["author_details"] = author_data
     end
 
     # Add authors listed in `authors` but missing from author_details
     for proj_author in project["authors"]
         name, email = parse_author(proj_author)
         covered = any(authors) do author
-            author == proj_author ||
-                lowercase(author) == lowercase(proj_author) ||
-                occursin(author, proj_author) ||
-                parse_author(author) == (name, email)
+            return author == proj_author ||
+                   lowercase(author) == lowercase(proj_author) ||
+                   occursin(author, proj_author) ||
+                   parse_author(author) == (name, email)
         end
         if !covered
             detail = OrderedDict{String, Any}("name" => name)
             isnothing(email) || (detail["email"] = email)
-            push!(project["author_details"], detail)
+            push!(rsmd["author_details"], detail)
             push!(authors, isnothing(email) ? name : name * " <" * email * ">")
             @warn "Added $name to author_details in Project.toml, please " *
                   "add their ORCID and ROR affiliation there if you can"
@@ -313,6 +319,12 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         cm_license = "https://spdx.org/licenses/" * proj_license
         if haskey(codemeta, "license")
             if codemeta["license"] == cm_license
+                haslicense = true
+                license = proj_license
+            elseif update
+                @info "Updating license in codemeta.json to match Project.toml " *
+                      "($(codemeta["license"]) → $cm_license)"
+                codemeta["license"] = cm_license
                 haslicense = true
                 license = proj_license
             else
@@ -366,7 +378,7 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     end
 
     cm_authors = get(codemeta, "author", OrderedDict{String, Any}[])
-    proj_authors = project["author_details"]
+    proj_authors = rsmd["author_details"]
     cm_from_proj = OrderedDict{String, Any}[]
     for author in proj_authors
         person = haskey(author, "orcid") ?
@@ -437,7 +449,8 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         keys_from_cm = author_key.(cm_authors)
         for dict in cm_authors
             if author_key(dict) ∉ keys_from_proj
-                @error "$dict not in Project.toml, removing from codemeta.json"
+                msg = "$dict not in Project.toml, removing from codemeta.json"
+                update ? (@info msg) : (@error msg)
             end
         end
         for dict in cm_from_proj
@@ -458,7 +471,8 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
                        "$(codemeta["continuousIntegration"]) ≠ $(codemeta["codemeta:contIntegration"]["id"])"
             end
         else
-            codemeta["codemeta:contIntegration"] = Dict("id" => codemeta["continuousIntegration"])
+            codemeta["codemeta:contIntegration"] = Dict("id" =>
+                                                            codemeta["continuousIntegration"])
         end
     else
         if haskey(codemeta, "codemeta:contIntegration")
@@ -467,22 +481,25 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
             @info "Using .github/workflows/testing.yaml for CI"
             codemeta["continuousIntegration"] = urls[repo_index] *
                                                 "/actions/workflows/testing.yaml"
-            codemeta["codemeta:contIntegration"] = Dict("id" => codemeta["continuousIntegration"])
+            codemeta["codemeta:contIntegration"] = Dict("id" =>
+                                                            codemeta["continuousIntegration"])
         elseif isfile(".github/workflows/CI.yaml")
             @info "Using .github/workflows/CI.yaml for CI"
             codemeta["continuousIntegration"] = urls[repo_index] *
                                                 "/actions/workflows/CI.yaml"
-            codemeta["codemeta:contIntegration"] = Dict("id" => codemeta["continuousIntegration"])
+            codemeta["codemeta:contIntegration"] = Dict("id" =>
+                                                            codemeta["continuousIntegration"])
         elseif isdir(".github/workflows")
             @warn "CI not found in codemeta.json, but .github/workflows exists"
         end
     end
 
-    reconcile!(project, codemeta, "keywords", "keywords",
-               value = keywords, default = ["julia"], to_cm = sort)
+    reconcile!(rsmd, codemeta, "keywords", "keywords",
+               value = keywords, default = ["julia"], to_cm = sort,
+               update = update)
 
-    publications = reconcile!(project, codemeta, "publications",
-                              "referencePublication",
+    publications = reconcile!(rsmd, codemeta, "publications",
+                              "referencePublication", update = update,
                               to_cm = dois -> "https://doi.org/" .* dois,
                               from_cm = refs -> replace.(refs isa Vector ?
                                                          refs : [refs],
