@@ -29,22 +29,25 @@ end
 """
     ResearchSoftwareMetadata.reconcile!(project, codemeta, proj_key, cm_key;
                                         value = nothing, default = nothing,
-                                        to_cm = identity, from_cm = identity)
+                                        to_cm = identity, from_cm = identity,
+                                        update = false)
 
 Reconcile a metadata field between `Project.toml` (authoritative) and
 `codemeta.json`. An explicit `value` (e.g. from a keyword argument to
 `crosswalk`) takes precedence and is written into both; otherwise the
 `Project.toml` entry is used, fixing `codemeta.json` with a warning if it
-disagrees. If the field is missing from `Project.toml` but present in
-`codemeta.json`, it is backfilled into `Project.toml`. If it is absent
-from both, `default` is used for `codemeta.json` (when provided) without
-being backfilled. `to_cm` and `from_cm` convert values between the
-`Project.toml` and `codemeta.json` representations. Returns the
-`Project.toml`-side value, or `nothing` if the field is absent everywhere.
+disagrees — or an informational message when `update` is true, meaning
+the `Project.toml` change is deliberate and should just propagate. If the
+field is missing from `Project.toml` but present in `codemeta.json`, it
+is backfilled into `Project.toml`. If it is absent from both, `default`
+is used for `codemeta.json` (when provided) without being backfilled.
+`to_cm` and `from_cm` convert values between the `Project.toml` and
+`codemeta.json` representations. Returns the `Project.toml`-side value,
+or `nothing` if the field is absent everywhere.
 """
 function reconcile!(project, codemeta, proj_key, cm_key;
                     value = nothing, default = nothing,
-                    to_cm = identity, from_cm = identity)
+                    to_cm = identity, from_cm = identity, update = false)
     if !isnothing(value)
         project[proj_key] = value
     end
@@ -53,8 +56,9 @@ function reconcile!(project, codemeta, proj_key, cm_key;
         cm_val = to_cm(val)
         if haskey(codemeta, cm_key) && codemeta[cm_key] ≠ cm_val &&
            isnothing(value)
-            @warn "Fixing codemeta.json $cm_key to match Project.toml " *
+            msg = "Fixing codemeta.json $cm_key to match Project.toml " *
                   "($(codemeta[cm_key]) ≠ $cm_val)"
+            update ? (@info msg) : (@warn msg)
         end
         codemeta[cm_key] = cm_val
         return val

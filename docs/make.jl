@@ -19,7 +19,8 @@ makedocs(;
                                   canonical = "https://boydorr.github.io/ResearchSoftwareMetadata.jl",
                                   edit_link = "main",
                                   assets = String[]),
-         pages = ["Home" => "index.md"])
+         pages = ["Home" => "index.md",
+             "Automated package checks" => "testing.md"])
 
 deploydocs(;
            repo = "github.com/boydorr/ResearchSoftwareMetadata.jl",

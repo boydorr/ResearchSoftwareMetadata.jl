@@ -19,6 +19,7 @@ Dates = "1.6"
 Git = "1"
 HTTP = "1,2"
 JSON = "1"
+JuliaFormatter = "2"
 Logging = "1"
 TOML = "1"
 YAML = "0.4"
@@ -27,6 +28,7 @@ julia = "1.10"
 [extras]
 Git = "d7ba0133-e1db-5d97-8f8c-041e4b3a1eb2"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+JuliaFormatter = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
@@ -46,4 +48,4 @@ development_status = "active"
         ror = "00vtgdb53"
 
 [targets]
-test = ["Test", "Git", "JSON", "Logging", "TOML"]
+test = ["Test", "Git", "JSON", "JuliaFormatter", "Logging", "TOML"]

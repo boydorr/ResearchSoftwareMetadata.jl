@@ -97,6 +97,10 @@ using MyPackage
 format(MyPackage)
 ```
 
+## Automated checking
+
+You can also make your package's own test suite check automatically that the metadata crosswalk is clean and the code is well formatted, by copying a few files from this package's `test/` directory into your own. See [Automated package checks](testing.md) for instructions.
+
 ## Reference guide
 
 ```@index

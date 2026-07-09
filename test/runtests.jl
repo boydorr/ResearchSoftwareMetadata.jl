@@ -10,13 +10,10 @@ using Test
 include("GitUtils.jl")
 using .GitUtils
 
-@testset "ResearchSoftwareMetadata.jl" begin
+@testset "Version bumping" begin
     git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     project = ResearchSoftwareMetadata.read_project()
-    @test isnothing(ResearchSoftwareMetadata.crosswalk())
     @test_nowarn global_logger(SimpleLogger(stderr, Logging.Warn))
-    @test_nowarn ResearchSoftwareMetadata.crosswalk()
-    @test is_repo_clean(git_dir)
     @test_nowarn ResearchSoftwareMetadata.increase_patch()
     @test_nowarn ResearchSoftwareMetadata.increase_minor()
     @test_nowarn ResearchSoftwareMetadata.increase_major()
@@ -302,18 +299,31 @@ end
         @test !isfile(joinpath(dir, ".zenodo.json"))
         @test !isfile(joinpath(dir, "LICENSE"))
     end
+end
 
-    # Does not currently work on Windows runners on GitHub due to file writing issues
-    if !haskey(ENV, "RUNNER_OS") || ENV["RUNNER_OS"] ≠ "Windows"
-        @testset "RSMD" begin
-            git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
-            @test isnothing(ResearchSoftwareMetadata.crosswalk())
-            global_logger(SimpleLogger(stderr, Logging.Warn))
-            @test_nowarn ResearchSoftwareMetadata.crosswalk()
-            global_logger(SimpleLogger(stderr, Logging.Info))
-            @test is_repo_clean(git_dir; strict = haskey(ENV, "RUNNER_OS"))
+rsmd = get(ENV, "RSMD_CROSSWALK", "FALSE")
+if rsmd == "TRUE" || !haskey(ENV, "RUNNER_OS") # Crosswalk runner or local testing
+    # Test RSMD crosswalk and other hygiene issues
+
+    # Identify files that are checking package hygiene; use @__DIR__ because
+    # crosswalk() in earlier testsets leaves the working directory changed
+    cleanbase = map(file -> replace(file, r"clean_(.*).jl$" => s"\1"),
+                    filter(str -> occursin(r"^clean_.*\.jl$", str),
+                           readdir(@__DIR__)))
+
+    if length(cleanbase) > 0
+        @info "Crosswalk and clean testing:"
+        @testset begin
+            for c in cleanbase
+                println("    = $c")
+            end
+            println()
+
+            @testset for c in cleanbase
+                fn = "clean_$c.jl"
+                println("    * Verifying $c.jl ...")
+                include(fn)
+            end
         end
-    else
-        @test_broken !haskey(ENV, "RUNNER_OS") || ENV["RUNNER_OS"] ≠ "Windows"
     end
 end

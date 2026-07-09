@@ -21,8 +21,10 @@ The software category can be set with the `category` argument, likewise the `key
 argument can contain a vector of keyword strings; both take precedence over and are written
 back into `Project.toml`. The `build` argument sets the `buildInstructions` RSMD
 field - `false` leaves the instructions as is, `true` sets it to the same as the README,
-and a string sets it to that value. If `update` is true, mismatches between version numbers in
-`codemeta.json` are accepted. If any remote metadata query (orcid.org, ror.org, spdx.org,
+and a string sets it to that value. If `update` is true, changes to `Project.toml` (e.g. to
+the version or the license) are treated as deliberate and propagated to the other metadata
+files with `@info` messages instead of being reported as warnings or errors.
+If any remote metadata query (orcid.org, ror.org, spdx.org,
 doi.org or Julia's General registry) cannot be completed, the crosswalk throws an error and
 all files are left in their original state.
 """
@@ -59,12 +61,13 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     codemeta["@context"] = "https://w3id.org/codemeta/3.0"
     codemeta["type"] = "SoftwareSourceCode"
     isnothing(reconcile!(rsmd, codemeta, "category", "applicationCategory",
-                         value = category)) &&
+                         value = category, update = update)) &&
         @warn "No category metadata, add `category` to [rsmd] in Project.toml"
     codemeta["programmingLanguage"] = "julia"
     reconcile!(rsmd, codemeta, "development_status", "developmentStatus",
-               default = "active")
-    isnothing(reconcile!(rsmd, codemeta, "description", "description")) &&
+               default = "active", update = update)
+    isnothing(reconcile!(rsmd, codemeta, "description", "description",
+                         update = update)) &&
         @warn "No description metadata, add `description` to [rsmd] in Project.toml"
 
     repo_index = "origin" ∈ remotes ?
@@ -318,6 +321,12 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
             if codemeta["license"] == cm_license
                 haslicense = true
                 license = proj_license
+            elseif update
+                @info "Updating license in codemeta.json to match Project.toml " *
+                      "($(codemeta["license"]) → $cm_license)"
+                codemeta["license"] = cm_license
+                haslicense = true
+                license = proj_license
             else
                 @error "License mismatch between Project.toml and codemeta.json: " *
                        "$(codemeta["license"]) ≠ $cm_license"
@@ -440,7 +449,8 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         keys_from_cm = author_key.(cm_authors)
         for dict in cm_authors
             if author_key(dict) ∉ keys_from_proj
-                @error "$dict not in Project.toml, removing from codemeta.json"
+                msg = "$dict not in Project.toml, removing from codemeta.json"
+                update ? (@info msg) : (@error msg)
             end
         end
         for dict in cm_from_proj
@@ -485,10 +495,11 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     end
 
     reconcile!(rsmd, codemeta, "keywords", "keywords",
-               value = keywords, default = ["julia"], to_cm = sort)
+               value = keywords, default = ["julia"], to_cm = sort,
+               update = update)
 
     publications = reconcile!(rsmd, codemeta, "publications",
-                              "referencePublication",
+                              "referencePublication", update = update,
                               to_cm = dois -> "https://doi.org/" .* dois,
                               from_cm = refs -> replace.(refs isa Vector ?
                                                          refs : [refs],
