@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Automated package checks · ResearchSoftwareMetadata.jl</title><meta name="title" content="Automated package checks · ResearchSoftwareMetadata.jl"/><meta property="og:title" content="Automated package checks · ResearchSoftwareMetadata.jl"/><meta property="twitter:title" content="Automated package checks · ResearchSoftwareMetadata.jl"/><meta name="description" content="Documentation for ResearchSoftwareMetadata.jl."/><meta property="og:description" content="Documentation for ResearchSoftwareMetadata.jl."/><meta property="twitter:description" content="Documentation for ResearchSoftwareMetadata.jl."/><meta property="og:url" content="https://boydorr.github.io/ResearchSoftwareMetadata.jl/testing/"/><meta property="twitter:url" content="https://boydorr.github.io/ResearchSoftwareMetadata.jl/testing/"/><link rel="canonical" href="https://boydorr.github.io/ResearchSoftwareMetadata.jl/testing/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">ResearchSoftwareMetadata.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li class="is-active"><a class="tocitem" href>Automated package checks</a><ul class="internal"><li><a class="tocitem" href="#Files-to-copy"><span>Files to copy</span></a></li><li><a class="tocitem" href="#Running-them-from-your-test-suite"><span>Running them from your test suite</span></a></li><li><a class="tocitem" href="#Running-them-on-CI"><span>Running them on CI</span></a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Automated package checks</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Automated package checks</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/boydorr/ResearchSoftwareMetadata.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/main/docs/src/testing.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Automated-package-checks"><a class="docs-heading-anchor" href="#Automated-package-checks">Automated package checks</a><a id="Automated-package-checks-1"></a><a class="docs-heading-anchor-permalink" href="#Automated-package-checks" title="Permalink"></a></h1><p>As well as running the crosswalk by hand, you can make your package&#39;s own test suite verify that its metadata and formatting stay clean: that running <code>ResearchSoftwareMetadata.crosswalk()</code> on the package regenerates exactly the files that are committed (so the metadata is consistent and up to date), and that running <a href="https://github.com/domluna/JuliaFormatter.jl">JuliaFormatter</a> leaves the source code unchanged (so the code is well formatted). If either check would change a file, the test fails until you re-run the crosswalk or formatter and commit the result.</p><p>This is how ResearchSoftwareMetadata tests itself, and the test files are written so that they can be copied into any other package.</p><h2 id="Files-to-copy"><a class="docs-heading-anchor" href="#Files-to-copy">Files to copy</a><a id="Files-to-copy-1"></a><a class="docs-heading-anchor-permalink" href="#Files-to-copy" title="Permalink"></a></h2><p>Copy these three files from ResearchSoftwareMetadata&#39;s <a href="https://github.com/boydorr/ResearchSoftwareMetadata.jl/tree/main/test"><code>test/</code> directory</a> into your own package&#39;s <code>test/</code> directory:</p><ul><li><a href="https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/main/test/GitUtils.jl"><code>GitUtils.jl</code></a> — provides <code>is_repo_clean</code>, which the other two files use to check whether the checks changed anything. It needs no adaptation (though you may want to change the SPDX header to your own package&#39;s licence identifier).</li><li><a href="https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/main/test/clean_ResearchSoftwareMetadata.jl"><code>clean_ResearchSoftwareMetadata.jl</code></a> — checks the metadata crosswalk is clean.</li><li><a href="https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/main/test/clean_JuliaFormatter.jl"><code>clean_JuliaFormatter.jl</code></a> — checks the code formatting is clean.</li></ul><p>You can use either or both of the <code>clean_*.jl</code> files; the test-suite code below discovers whichever ones are present.</p><p>In each <code>clean_*.jl</code> file, replace <code>ResearchSoftwareMetadata</code> in the <code>using</code> line with your own package where it stands for the package under test, and set the SPDX header to your package&#39;s licence (otherwise the crosswalk will rewrite it and the check will fail). For a package called <code>MyPackage</code> with an MIT licence, the two files look like this:</p><pre><code class="language-julia hljs"># SPDX-License-Identifier: MIT
+
+module CleanRSMD
+using Test
+using Git
+using Logging
+using MyPackage
+using ResearchSoftwareMetadata
+
+include(&quot;GitUtils.jl&quot;)
+using .GitUtils
+
+# Does not currently work on Windows runners on GitHub due to file writing issues
+if !haskey(ENV, &quot;RUNNER_OS&quot;) || ENV[&quot;RUNNER_OS&quot;] ≠ &quot;Windows&quot;
+    @testset &quot;RSMD&quot; begin
+        git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk())
+        global_logger(SimpleLogger(stderr, Logging.Warn))
+        @test_nowarn ResearchSoftwareMetadata.crosswalk()
+        global_logger(SimpleLogger(stderr, Logging.Info))
+        @test is_repo_clean(git_dir; strict = haskey(ENV, &quot;RUNNER_OS&quot;))
+    end
+else
+    @test_broken !haskey(ENV, &quot;RUNNER_OS&quot;) || ENV[&quot;RUNNER_OS&quot;] ≠ &quot;Windows&quot;
+end
+
+end</code></pre><pre><code class="language-julia hljs"># SPDX-License-Identifier: MIT
+
+module CleanJuliaFormatter
+using Test
+using Git
+using JuliaFormatter
+using MyPackage
+
+include(&quot;GitUtils.jl&quot;)
+using .GitUtils
+
+# Does not currently work on Windows runners on GitHub due to file writing issues
+if !haskey(ENV, &quot;RUNNER_OS&quot;) || ENV[&quot;RUNNER_OS&quot;] ≠ &quot;Windows&quot;
+    @testset &quot;JuliaFormatter&quot; begin
+        git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+        @test_nowarn format(MyPackage)
+        @test is_repo_clean(git_dir; strict = haskey(ENV, &quot;RUNNER_OS&quot;))
+    end
+else
+    @test_broken !haskey(ENV, &quot;RUNNER_OS&quot;) || ENV[&quot;RUNNER_OS&quot;] ≠ &quot;Windows&quot;
+end
+
+end</code></pre><p>The formatting check assumes a <code>.JuliaFormatter.toml</code> file in your package root defining your formatting standard, as described at the end of the <a href="../">home page</a>.</p><h2 id="Running-them-from-your-test-suite"><a class="docs-heading-anchor" href="#Running-them-from-your-test-suite">Running them from your test suite</a><a id="Running-them-from-your-test-suite-1"></a><a class="docs-heading-anchor-permalink" href="#Running-them-from-your-test-suite" title="Permalink"></a></h2><p>Add this block to the end of your <code>test/runtests.jl</code>. It discovers any <code>clean_*.jl</code> files in your <code>test/</code> directory and runs each one in its own testset:</p><pre><code class="language-julia hljs">rsmd = get(ENV, &quot;RSMD_CROSSWALK&quot;, &quot;FALSE&quot;)
+if rsmd == &quot;TRUE&quot; || !haskey(ENV, &quot;RUNNER_OS&quot;) # Crosswalk runner or local testing
+    # Test RSMD crosswalk and other hygiene issues
+
+    # Identify files that are checking package hygiene
+    cleanbase = map(file -&gt; replace(file, r&quot;clean_(.*).jl$&quot; =&gt; s&quot;\1&quot;),
+                    filter(str -&gt; occursin(r&quot;^clean_.*\.jl$&quot;, str),
+                           readdir(@__DIR__)))
+
+    if length(cleanbase) &gt; 0
+        @info &quot;Crosswalk and clean testing:&quot;
+        @testset begin
+            for c in cleanbase
+                println(&quot;    = $c&quot;)
+            end
+            println()
+
+            @testset for c in cleanbase
+                fn = &quot;clean_$c.jl&quot;
+                println(&quot;    * Verifying $c.jl ...&quot;)
+                include(fn)
+            end
+        end
+    end
+end</code></pre><p>The checks always run locally (when <code>RUNNER_OS</code> is not set); on GitHub runners they only run when the <code>RSMD_CROSSWALK</code> environment variable is set to <code>TRUE</code> (see below).</p><p>Finally, add the test dependencies to your <code>Project.toml</code> — <code>Git</code>, <code>JuliaFormatter</code>, <code>Logging</code>, <code>ResearchSoftwareMetadata</code> and <code>Test</code> need to appear in <code>[extras]</code> (with their UUIDs) and in the <code>test</code> list in <code>[targets]</code>.</p><h2 id="Running-them-on-CI"><a class="docs-heading-anchor" href="#Running-them-on-CI">Running them on CI</a><a id="Running-them-on-CI-1"></a><a class="docs-heading-anchor-permalink" href="#Running-them-on-CI" title="Permalink"></a></h2><p>On GitHub Actions, set <code>RSMD_CROSSWALK: TRUE</code> on one canonical runner rather than the whole matrix — formatter output can differ between Julia and JuliaFormatter versions, so running the checks everywhere invites spurious failures. With a matrix like this package&#39;s, that looks like:</p><pre><code class="language-yaml hljs">      - uses: julia-actions/julia-runtest@v1
+        env:
+          RSMD_CROSSWALK: ${{ (matrix.os == &#39;ubuntu-latest&#39; &amp;&amp; matrix.julia-version == &#39;1&#39;) &amp;&amp; &#39;TRUE&#39; || &#39;FALSE&#39; }}</code></pre><p>Some things to be aware of:</p><ul><li>The crosswalk queries orcid.org, ror.org, spdx.org and the Julia General registry, so the runner needs network access, and it interrogates the git history and tags, so the repository must be checked out in full (<code>fetch-depth: 0</code> on <code>actions/checkout</code>).</li><li>Windows runners are skipped by both checks (marked as broken) due to file writing issues.</li><li>On CI the repository must be <em>strictly</em> clean — no staged, unstaged or untracked changes after the checks run. Locally the criterion is relaxed: only unstaged changes fail the tests, so work you have already staged doesn&#39;t stop you running the suite.</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Home</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Thursday 9 July 2026 15:33">Thursday 9 July 2026</span>. Using Julia version 1.12.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
