@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: BSD-2-Clause
+# SPDX-License-Identifier: MIT
 
 using Pkg
 "ResearchSoftwareMetadata" ∈ [p.name for p in values(Pkg.dependencies())] &&

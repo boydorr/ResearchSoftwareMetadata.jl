@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: BSD-2-Clause
+# SPDX-License-Identifier: MIT
 
 """
     ResearchSoftwareMetadata.get_person_from_orcid(orcid::String)

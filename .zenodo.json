@@ -11,7 +11,7 @@
         }
     ],
     "access_right": "open",
-    "license": "BSD-2-Clause",
+    "license": "MIT",
     "related_identifiers": [
         {
             "scheme": "url",

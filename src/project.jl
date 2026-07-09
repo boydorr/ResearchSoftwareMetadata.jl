@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: BSD-2-Clause
+# SPDX-License-Identifier: MIT
 
 # Pkg's canonical Project.toml key order (Pkg/src/project.jl, Julia 1.13)
 const PROJECT_KEY_ORDER = ["name", "uuid", "keywords", "license", "desc",
