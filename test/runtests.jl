@@ -284,6 +284,55 @@ end
     end
 end
 
+@testset "Propagate Project.toml changes with update" begin
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    extra = """
+            description = "A fixture package"
+            category = "metadata"
+            """
+    # With update = true, deliberate Project.toml changes propagate with @info
+    mktempdir() do dir
+        make_fixture(dir, extra = extra)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir, build = true))
+        cd(git_dir) # crosswalk leaves the working directory changed
+        toml = joinpath(dir, "Project.toml")
+        project = TOML.parsefile(toml)
+        project["license"] = "BSD-2-Clause"
+        project["rsmd"]["description"] = "An updated fixture package"
+        open(toml, "w") do io
+            return TOML.print(io, project)
+        end
+        @test_nowarn ResearchSoftwareMetadata.crosswalk(dir, update = true)
+        cd(git_dir)
+        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+        @test codemeta["license"] == "https://spdx.org/licenses/BSD-2-Clause"
+        @test codemeta["description"] == "An updated fixture package"
+        zenodo = JSON.parsefile(joinpath(dir, ".zenodo.json"))
+        @test zenodo["license"] == "BSD-2-Clause"
+        @test zenodo["description"] == "An updated fixture package"
+        @test occursin("Redistribution",
+                       read(joinpath(dir, "LICENSE"), String))
+        src = readlines(joinpath(dir, "src", "RSMDFixture.jl"))
+        @test src[1] == "# SPDX-License-Identifier: BSD-2-Clause"
+    end
+    # Without update, a license mismatch is an error and is not propagated
+    mktempdir() do dir
+        make_fixture(dir, extra = extra)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir, build = true))
+        cd(git_dir) # crosswalk leaves the working directory changed
+        toml = joinpath(dir, "Project.toml")
+        project = TOML.parsefile(toml)
+        project["license"] = "BSD-2-Clause"
+        open(toml, "w") do io
+            return TOML.print(io, project)
+        end
+        @test_logs (:error, r"License mismatch") match_mode=:any ResearchSoftwareMetadata.crosswalk(dir)
+        cd(git_dir)
+        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+        @test codemeta["license"] == "https://spdx.org/licenses/MIT"
+    end
+end
+
 @testset "Failed crosswalk leaves files unchanged" begin
     git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     mktempdir() do dir
