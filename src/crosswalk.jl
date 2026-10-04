@@ -102,13 +102,13 @@ function run_crosswalk(git_dir::AbstractString; category, keywords,
     tag = isempty(tags) ? proj_version : maximum(VersionNumber.(tags))
     tag_date = isempty(tags) ? now :
                readchomp(`$(Git.git()) log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/v$tag`)
-    branch = readchomp(`$(Git.git()) branch --show-current`)
-    remotes = split(readchomp(`$(Git.git()) remote`), '\n')
-    urls = String[]
-    for remote in remotes
-        push!(urls,
-              replace(readchomp(`$(Git.git()) remote get-url $remote`),
-                      r"\.git" => ""))
+    remotes = readlines(`$(Git.git()) remote`)
+    isempty(remotes) &&
+        error("The repository at $git_dir has no git remote. The metadata " *
+              "records where the repository is, so add one with " *
+              "`git remote add origin <address>`")
+    urls = map(remotes) do remote
+        return repository_url(readchomp(`$(Git.git()) remote get-url $remote`))
     end
 
     repos = replace.(urls, r"^.*/([^/]+)$" => s"\1")
@@ -142,15 +142,18 @@ function run_crosswalk(git_dir::AbstractString; category, keywords,
                          update = update)) &&
         @warn "No description metadata, add `description` to [rsmd] in Project.toml"
 
-    repo_index = "origin" ∈ remotes ?
-                 repo_index = findfirst(==("origin"), remotes) : 1
+    repo_index = something(findfirst(==("origin"), remotes), 1)
 
     if haskey(codemeta, "codeRepository")
         cm_url = codemeta["codeRepository"]
-        if cm_url ∉ urls
-            @error "codemeta has wrong repo URL – $cm_url not in $urls – using $(remotes[repo_index])"
+        found = findfirst(==(repository_url(cm_url)), urls)
+        if isnothing(found)
+            @error "codemeta has wrong repo URL - $cm_url not in $urls - using $(remotes[repo_index])"
         else
-            repo_index = findfirst(==(cm_url), urls)
+            repo_index = found
+            cm_url == urls[found] ||
+                @info "Writing the repository in codemeta.json as " *
+                      "$(urls[found]), not $cm_url"
         end
     end
     codemeta["codeRepository"] = urls[repo_index]
@@ -158,14 +161,27 @@ function run_crosswalk(git_dir::AbstractString; category, keywords,
     if haskey(codemeta, "name")
         cm_name = codemeta["name"]
         if cm_name ≠ repos[repo_index]
-            @error "codemeta has wrong repo repo name – $cm_name not $(repos[repo_index]) – fixing"
+            @error "codemeta has wrong repo name - $cm_name not $(repos[repo_index]) - fixing"
         end
     end
     codemeta["name"] = repos[repo_index]
 
     codemeta["issueTracker"] = urls[repo_index] * "/issues"
 
-    readme = urls[repo_index] * "/blob/" * branch * "/README.md"
+    # The README on the default branch: a hosting site reads `HEAD` as that
+    # branch, whatever it is called and whichever branch is checked out. A link
+    # of the same form that names a branch is brought into line, and any other
+    # link is left
+    readme = urls[repo_index] * "/blob/HEAD/README.md"
+    for key in ("readme", "buildInstructions")
+        link = get(codemeta, key, nothing)
+        link isa AbstractString && link ≠ readme &&
+        startswith(link, urls[repo_index] * "/blob/") &&
+        endswith(link, "/README.md") || continue
+        @info "Moving $key in codemeta.json from $link to $readme, which " *
+              "follows the default branch"
+        codemeta[key] = readme
+    end
     cm_readme = get!(codemeta, "readme", readme)
     cm_readme == readme ||
         @info "README set to $cm_readme, not $readme"

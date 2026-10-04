@@ -319,7 +319,8 @@ end
 end
 
 function make_fixture(dir; license = "MIT", extra = "", author_details = true,
-                      workflows = true)
+                      workflows = true,
+                      remote = "https://github.com/example/RSMDFixture.jl")
     # A fixture with no license has neither the Project.toml entry nor a header
     license_entry = isnothing(license) ? "" : "license = \"$license\"\n"
     header = isnothing(license) ? "" : "# SPDX-License-Identifier: $license\n\n"
@@ -365,8 +366,7 @@ function make_fixture(dir; license = "MIT", extra = "", author_details = true,
         end
     end
     run(`$(Git.git()) -C $dir init -q -b main`)
-    run(`$(Git.git()) -C $dir remote add origin
-         https://github.com/example/RSMDFixture.jl`)
+    isnothing(remote) || run(`$(Git.git()) -C $dir remote add origin $remote`)
     run(`$(Git.git()) -C $dir add -A`)
     run(`$(Git.git()) -C $dir -c user.name=Test
          -c user.email=test@example.com commit -q -m Fixture`)
@@ -961,6 +961,111 @@ end
         @test read(joinpath(dir, "Project.toml"), String) == project_content
         @test !isfile(joinpath(dir, ".zenodo.json"))
         @test !isfile(joinpath(dir, "LICENSE"))
+    end
+end
+
+@testset "Repository addresses" begin
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    web = "https://github.com/example/RSMDFixture.jl"
+
+    @testset "Remotes" begin
+        url = ResearchSoftwareMetadata.repository_url
+        @test url("https://github.com/o/r.git") == "https://github.com/o/r"
+        @test url("https://github.com/o/r/") == "https://github.com/o/r"
+        # Only an ending is taken off, not every ".git" in the address
+        @test url("https://github.com/o/r.github.io.git") ==
+              "https://github.com/o/r.github.io"
+        @test url("git@github.com:o/r.jl.git") == "https://github.com/o/r.jl"
+        @test url("ssh://git@github.com/o/r.git") == "https://github.com/o/r"
+        @test url("ssh://git@host:2222/o/r.git") == "https://host/o/r"
+        @test url("git://github.com/o/r.git") == "https://github.com/o/r"
+        # A password or token does not go into the metadata, a port does
+        @test url("https://user:token@github.com/o/r.git") ==
+              "https://github.com/o/r"
+        @test url("https://host:8443/o/r.git") == "https://host:8443/o/r"
+        @test url("/some/local/path") == "/some/local/path"
+    end
+
+    # A clone made over ssh still gives web addresses throughout
+    mktempdir() do dir
+        make_fixture(dir, remote = "git@github.com:example/RSMDFixture.jl.git")
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        cd(git_dir) # crosswalk leaves the working directory changed
+        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+        @test codemeta["codeRepository"] == web
+        @test codemeta["name"] == "RSMDFixture.jl"
+        @test codemeta["issueTracker"] == web * "/issues"
+        @test codemeta["readme"] == web * "/blob/HEAD/README.md"
+        @test startswith(codemeta["downloadUrl"], web * "/archive/")
+        zenodo = JSON.parsefile(joinpath(dir, ".zenodo.json"))
+        @test zenodo["related_identifiers"][1]["identifier"] == web
+    end
+
+    # The address of the remote written as git has it is the same repository
+    mktempdir() do dir
+        make_fixture(dir)
+        write(joinpath(dir, "codemeta.json"),
+              "{\n    \"codeRepository\": " *
+              "\"git@github.com:example/RSMDFixture.jl\"\n}\n")
+        @test_logs (:info, r"Writing the repository in codemeta.json as") match_mode=:any ResearchSoftwareMetadata.crosswalk(dir)
+        cd(git_dir)
+        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+        @test codemeta["codeRepository"] == web
+    end
+
+    # Without a remote there is no address to record
+    mktempdir() do dir
+        make_fixture(dir, remote = nothing)
+        before = fixture_files(dir)
+        @test_throws "has no git remote" ResearchSoftwareMetadata.crosswalk(dir)
+        cd(git_dir)
+        @test fixture_files(dir) == before
+    end
+end
+
+@testset "Links to the default branch" begin
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    web = "https://github.com/example/RSMDFixture.jl"
+    # HEAD is the default branch of the repository, whatever it is called
+    readme = web * "/blob/HEAD/README.md"
+
+    # A crosswalk on another branch does not link to that branch
+    mktempdir() do dir
+        make_fixture(dir)
+        run(`$(Git.git()) -C $dir checkout -q -b feature`)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir, build = true))
+        cd(git_dir) # crosswalk leaves the working directory changed
+        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+        @test codemeta["readme"] == readme
+        @test codemeta["buildInstructions"] == readme
+    end
+
+    # Links of that form which name a branch are brought into line ...
+    links(readme, build) = "{\n    \"readme\": \"$readme\",\n    " *
+                           "\"buildInstructions\": \"$build\"\n}\n"
+    mktempdir() do dir
+        make_fixture(dir)
+        write(joinpath(dir, "codemeta.json"),
+              links(web * "/blob/rr/feature/README.md",
+                    web * "/blob/main/README.md"))
+        @test_logs (:info, r"Moving readme in codemeta.json") (:info,
+                                                               r"Moving buildInstructions") match_mode=:any ResearchSoftwareMetadata.crosswalk(dir)
+        cd(git_dir)
+        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+        @test codemeta["readme"] == readme
+        @test codemeta["buildInstructions"] == readme
+    end
+    # ... and any others are kept
+    mktempdir() do dir
+        make_fixture(dir)
+        elsewhere = "https://example.org/RSMDFixture/"
+        install = web * "/blob/feature/INSTALL.md"
+        write(joinpath(dir, "codemeta.json"), links(elsewhere, install))
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        cd(git_dir)
+        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+        @test codemeta["readme"] == elsewhere
+        @test codemeta["buildInstructions"] == install
     end
 end
 

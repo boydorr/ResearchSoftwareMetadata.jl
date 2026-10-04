@@ -7,8 +7,8 @@
     "codeRepository": "https://github.com/boydorr/ResearchSoftwareMetadata.jl",
     "name": "ResearchSoftwareMetadata.jl",
     "issueTracker": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/issues",
-    "readme": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/main/README.md",
-    "buildInstructions": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/main/README.md",
+    "readme": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/HEAD/README.md",
+    "buildInstructions": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/HEAD/README.md",
     "dateCreated": "2024-07-17",
     "operatingSystem": [
         "Linux",

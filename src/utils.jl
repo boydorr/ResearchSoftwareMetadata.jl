@@ -27,6 +27,29 @@ function parse_author(author::AbstractString)
 end
 
 """
+    ResearchSoftwareMetadata.repository_url(remote::AbstractString)
+
+Return the web address of a repository from the address of one of its git
+remotes, in whichever form git accepts it: `https://github.com/org/Pkg.jl.git`,
+`git@github.com:org/Pkg.jl.git` and `ssh://git@github.com/org/Pkg.jl.git`
+all give `https://github.com/org/Pkg.jl`. A user name or password in the
+address is left out, as is the port of an `ssh` or `git` address. An address
+in any other form, such as a path, is returned as it is.
+"""
+function repository_url(remote::AbstractString)
+    address = replace(replace(strip(remote), r"/+$" => ""), r"\.git$" => "")
+    web = match(r"^(https?)://(?:[^@/]*@)?(.+)$", address)
+    isnothing(web) || return web[1] * "://" * web[2]
+    other = match(r"^(?:ssh|git)://(?:[^@/]*@)?([^/:]+)(?::\d+)?/(.+)$",
+                  address)
+    # The form of scp, `user@host:path`, which has no scheme
+    isnothing(other) && (other = match(r"^[^@/:]+@([^/:]+):/*(.+)$", address))
+    isnothing(other) || return "https://" * other[1] * "/" * other[2]
+
+    return String(address)
+end
+
+"""
     ResearchSoftwareMetadata.read_json(file::AbstractString)
 
 Read a JSON metadata file such as `codemeta.json` into an `OrderedDict`.
