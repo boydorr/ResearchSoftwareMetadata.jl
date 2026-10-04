@@ -25,11 +25,13 @@ using TOML
 using JSON
 using DataStructures
 using HTTP
+using LicenseCheck
 using YAML
 
 include("project.jl")
 include("remotequeries.jl")
 include("utils.jl")
+include("licensing.jl")
 include("crosswalk.jl")
 include("versioning.jl")
 

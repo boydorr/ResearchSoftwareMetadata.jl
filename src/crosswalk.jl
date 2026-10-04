@@ -346,7 +346,8 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     elseif recorded isa AbstractString
         license_id = recorded
     else
-        error("No license found in Project.toml or codemeta.json. Set one " *
+        error("No license found in Project.toml or codemeta.json. " *
+              describe_license_files(git_dir) * "Set one " *
               "with `crosswalk(license = \"LGPL-3.0-or-later\")`, or add " *
               "`license = \"LGPL-3.0-or-later\"` to Project.toml, using " *
               LICENSE_ADVICE)
@@ -369,22 +370,29 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         error("Unable to fetch license text for $license_id from " *
               "spdx.org, HTTP status $(response.status)")
 
-    just_names = replace.(project["authors"], r" *<[^>]+> *" => "")
-    name_list = join(just_names, ", ", " and ")
     json = JSON.parse(String(response.body))
     open_license = json["isOsiApproved"]
-    license_content = json["licenseText"]
-    replaces = [r"<year>"i => years,
-        r"<owners?>"i => name_list,
-        r"<copyright holders?>"i => name_list,
-        r"<Owner Organization Name>"i => name_list,
-        r"<Asset Owner>"i => name_list,
-        r"<HOLDERS?>"i => name_list,
-        r"<name of author>"i => name_list,
-        r"<author's name or designee>"i => name_list]
-    for r in replaces
-        license_content = replace(license_content, r)
+    just_names = replace.(project["authors"], r" *<[^>]+> *" => "")
+    license_content = license_text(json["licenseText"], years, just_names)
+
+    # A license file left by an earlier run names the authors there were then,
+    # which are the ones still in codemeta.json
+    earlier_names = String[]
+    for author in get(codemeta, "author", [])
+        author isa AbstractDict || continue
+        given = get(author, "givenName", nothing)
+        family = get(author, "familyName", get(author, "name", nothing))
+        isnothing(family) ||
+            push!(earlier_names, isnothing(given) ? family : "$given $family")
     end
+    earlier_content = license_text(json["licenseText"], years, earlier_names)
+    license_changes = license_file_changes(git_dir, license_id,
+                                           [
+                                               license_content,
+                                               earlier_content
+                                           ],
+                                           replace = update ||
+                                                     !isnothing(license))
 
     cm_authors = get(codemeta, "author", OrderedDict{String, Any}[])
     proj_authors = rsmd["author_details"]
@@ -579,11 +587,19 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     new_headers = header_changes(git_dir, license_id)
 
     # All remote queries have succeeded, so the files can now be written
-    file = joinpath(git_dir, "LICENSE")
-    open(file, "w") do io
-        return write(io, license_content)
+    if license_changes.write
+        file = joinpath(git_dir, "LICENSE")
+        open(file, "w") do io
+            return write(io, license_content)
+        end
     end
-    rm(joinpath(git_dir, "LICENSE.md"), force = true)
+    for file in license_changes.remove
+        rm(file)
+        @info license_changes.write ?
+              "Replaced $(basename(file)) with LICENSE" :
+              "Removed $(basename(file)), which did not hold the " *
+              "$license_id license"
+    end
 
     file = joinpath(git_dir, "Project.toml")
     open(file, "w") do io
