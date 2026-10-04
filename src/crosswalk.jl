@@ -571,6 +571,8 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     # Round-trip to ensure correct order if there were elements missing
     project = order_project(TOML.parse(sprint(TOML.print, project)))
 
+    headers = header_changes(git_dir, project["license"])
+
     # All remote queries have succeeded, so the files can now be written
     if !isnothing(license_content)
         file = joinpath(git_dir, "LICENSE")
@@ -595,28 +597,8 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         return JSON.print(io, crosswalk_d, 4)
     end
 
-    # Recursively walk through the directory
-    path = joinpath(git_dir, ".git")
-    notpath = joinpath(git_dir, ".github")
-    for (root, _, files) in walkdir(git_dir)
-        if !startswith(root, path) || startswith(root, notpath)
-            for file in files
-                if endswith(file, ".jl")
-                    jl_file = joinpath(root, file)
-                    data = readlines(jl_file)
-                    if startswith(data[1], "# SPDX-License-Identifier:")
-                        data[1] = "# SPDX-License-Identifier: $(project["license"])"
-                    elseif !startswith(data[1], "### A Pluto.jl notebook ###")
-                        pushfirst!(data, "")
-                        pushfirst!(data,
-                                   "# SPDX-License-Identifier: $(project["license"])")
-                    end
-                    open(jl_file, "w") do io
-                        return println.(Ref(io), data)
-                    end
-                end
-            end
-        end
+    for (jl_file, content) in headers
+        write(jl_file, content)
     end
 
     return nothing

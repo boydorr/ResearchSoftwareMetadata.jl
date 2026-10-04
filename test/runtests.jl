@@ -679,6 +679,52 @@ end
     end
 end
 
+@testset "Source file headers" begin
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    header = "# SPDX-License-Identifier: MIT"
+    mktempdir() do dir
+        make_fixture(dir)
+        # Added after the fixture's commit, so none of these is tracked
+        before = Dict("src/empty.jl" => "",
+                      "src/bare.jl" => "x = 1\n",
+                      "src/other.jl" => "# SPDX-License-Identifier: ISC\n\nx = 1\n",
+                      "test/deep/with space δ.jl" => "x = 1\n",
+                      "src/done.jl" => "$header\n\nx = 1",
+                      "src/notebook.jl" => "### A Pluto.jl notebook ###\nx = 1",
+                      "scratch/junk.jl" => "x = 1",
+                      ".gitignore" => "scratch/\n")
+        after = Dict("src/empty.jl" => "$header\n",
+                     "src/bare.jl" => "$header\n\nx = 1\n",
+                     "src/other.jl" => "$header\n\nx = 1\n",
+                     "test/deep/with space δ.jl" => "$header\n\nx = 1\n")
+        for (name, content) in before
+            mkpath(dirname(joinpath(dir, name)))
+            write(joinpath(dir, name), content)
+        end
+        contents() = Dict(name => read(joinpath(dir, name), String)
+                          for name in keys(before))
+
+        # Only the files that need a header are listed, and listing writes nothing
+        changes = ResearchSoftwareMetadata.header_changes(dir, "MIT")
+        @test Dict(changes) ==
+              Dict(joinpath(dir, name) => content for (name, content) in after)
+        @test contents() == before
+
+        # A file with its header, a notebook and an ignored file are not rewritten
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        cd(git_dir) # crosswalk leaves the working directory changed
+        @test contents() == merge(before, after)
+        @test isempty(ResearchSoftwareMetadata.header_changes(dir, "MIT"))
+    end
+    # A tracked file that has been deleted is passed over
+    mktempdir() do dir
+        make_fixture(dir)
+        rm(joinpath(dir, "src", "RSMDFixture.jl"))
+        @test isempty(ResearchSoftwareMetadata.source_files(dir))
+        @test isempty(ResearchSoftwareMetadata.header_changes(dir, "MIT"))
+    end
+end
+
 @testset "Failed crosswalk leaves files unchanged" begin
     git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     mktempdir() do dir
