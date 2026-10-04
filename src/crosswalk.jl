@@ -98,10 +98,12 @@ function run_crosswalk(git_dir::AbstractString; category, keywords,
     now = string(today())
     cd(git_dir)
     init = readchomp(`$(Git.git()) log --max-parents=0 --format=%ad --date=short -n 1`)
-    tags = readlines(`$(Git.git()) tag -l --sort="version:refname"`)
-    tag = isempty(tags) ? proj_version : maximum(VersionNumber.(tags))
-    tag_date = isempty(tags) ? now :
-               readchomp(`$(Git.git()) log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/v$tag`)
+    releases = release_tags(git_dir)
+    latest = isempty(releases) ? nothing :
+             argmax(release -> release.version, releases)
+    tag = isnothing(latest) ? proj_version : latest.version
+    tag_date = isnothing(latest) ? now :
+               readchomp(`$(Git.git()) log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/$(latest.name)`)
     remotes = readlines(`$(Git.git()) remote`)
     isempty(remotes) &&
         error("The repository at $git_dir has no git remote. The metadata " *

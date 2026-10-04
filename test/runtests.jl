@@ -1023,6 +1023,59 @@ end
     end
 end
 
+@testset "Release tags" begin
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    tag(dir, name) = run(`$(Git.git()) -C $dir tag $name`)
+
+    # Only a v and a version number is a release of the package
+    mktempdir() do dir
+        make_fixture(dir)
+        @test isempty(ResearchSoftwareMetadata.release_tags(dir))
+        foreach(name -> tag(dir, name),
+                ["v0.1.0", "v0.2", "docs-preview", "2024.1", "vnext",
+                    "Sub-v1.0.0"])
+        releases = ResearchSoftwareMetadata.release_tags(dir)
+        @test Set(releases) == Set([(version = v"0.1.0", name = "v0.1.0"),
+                      (version = v"0.2.0", name = "v0.2")])
+    end
+
+    # Other tags do not stop the crosswalk, or pass for a later release than
+    # the one in Project.toml
+    mktempdir() do dir
+        make_fixture(dir)
+        foreach(name -> tag(dir, name), ["v0.1.0", "docs-preview", "2024.1"])
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        cd(git_dir) # crosswalk leaves the working directory changed
+        @test TOML.parsefile(joinpath(dir, "Project.toml"))["version"] ==
+              "0.1.0"
+        @test JSON.parsefile(joinpath(dir, "codemeta.json"))["version"] ==
+              "v0.1.0"
+    end
+
+    # A release tag is looked up under the name it has
+    mktempdir() do dir
+        make_fixture(dir)
+        tag(dir, "v0.1")
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        cd(git_dir)
+        @test JSON.parsefile(joinpath(dir, "codemeta.json"))["version"] ==
+              "v0.1.0"
+    end
+
+    # A registered package whose first release has no tag in the repository,
+    # as in a shallow clone
+    mktempdir() do dir
+        make_fixture(dir)
+        toml = joinpath(dir, "Project.toml")
+        project = TOML.parsefile(toml)
+        project["name"] = "Example"
+        open(toml, "w") do io
+            return TOML.print(io, project)
+        end
+        @test_throws "The repository has no tag for v" ResearchSoftwareMetadata.get_first_release_date(dir)
+    end
+end
+
 @testset "Links to the default branch" begin
     git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     web = "https://github.com/example/RSMDFixture.jl"

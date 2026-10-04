@@ -50,6 +50,23 @@ function repository_url(remote::AbstractString)
 end
 
 """
+    ResearchSoftwareMetadata.release_tags(git_dir::AbstractString)
+
+Return the release tags of the repository at `git_dir` as `(version, name)`
+named tuples: the tags that are a `v` followed by a version number, which
+is how TagBot and Registrator tag a release. Any other tag is not a release
+of the package and is left out, including a version number without the
+`v`, which a repository may use for something else.
+"""
+function release_tags(git_dir::AbstractString)
+    names = readlines(`$(Git.git()) -C $git_dir tag -l`)
+    releases = [(version = tryparse(VersionNumber, name), name = name)
+                for name in names if startswith(name, "v")]
+
+    return filter!(release -> !isnothing(release.version), releases)
+end
+
+"""
     ResearchSoftwareMetadata.read_json(file::AbstractString)
 
 Read a JSON metadata file such as `codemeta.json` into an `OrderedDict`.

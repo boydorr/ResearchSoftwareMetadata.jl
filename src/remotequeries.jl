@@ -123,8 +123,9 @@ end
 
 Returns the first release date of this package on Julia's `General`
 Registry, or today's date if the package has not been registered yet.
-Throws an error if the registry cannot be reached or returns an
-unexpected HTTP status.
+The date is that of the repository's tag for the release. Throws an error
+if the repository has no such tag, or if the registry cannot be reached or
+returns an unexpected HTTP status.
 """
 function get_first_release_date(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
     project = read_project(git_dir)
@@ -136,9 +137,15 @@ function get_first_release_date(git_dir = readchomp(`$(Git.git()) rev-parse --sh
     if response.status == 200
         data = TOML.parse(String(response.body))
         version = minimum(VersionNumber.(keys(data)))
-        cd(git_dir)
-        date = readchomp(`$(Git.git()) log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/v$version`)
-        return date
+        releases = release_tags(git_dir)
+        release = findfirst(release -> release.version == version, releases)
+        isnothing(release) &&
+            error("The repository has no tag for v$version, the first " *
+                  "release of $package in Julia's General registry, which " *
+                  "is where the date of that release is taken from. Fetch " *
+                  "the tags of the repository: a shallow clone has none")
+        tag = releases[release].name
+        return readchomp(`$(Git.git()) -C $git_dir log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/$tag`)
     elseif response.status == 404
         @info "No release yet on General, imputing first release will be today"
         return string(today())
