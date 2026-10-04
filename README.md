@@ -39,6 +39,8 @@ license = "BSD-2-Clause"
 
 A package has to have a license: the crosswalk stops with an error if it finds none, or one that is not an identifier from that list. You can also set the license when you run the crosswalk, as shown below.
 
+If the package has no license file, the crosswalk writes a `LICENSE` for that license, naming the people in the `authors` field of `Project.toml` as the copyright holders, so make sure `authors` is right first. A license file you already have is left exactly as it is, provided it holds that license.
+
 The crosswalk records the license on the first line of every julia file, as `# SPDX-License-Identifier: BSD-2-Clause`. If some files are deliberately under a different license, give each of them its own first line naming that license, and list those licenses in the `[rsmd]` table described next, so that the crosswalk knows they are intended and leaves them alone:
 
 ```toml

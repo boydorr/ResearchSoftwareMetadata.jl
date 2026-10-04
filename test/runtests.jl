@@ -632,10 +632,91 @@ end
         @test project["rsmd"]["description"] == "A fixture package"
         @test project["rsmd"]["keywords"] == ["fixture", "metadata"]
         @test project["rsmd"]["category"] == "metadata"
-        # Defaults are not backfilled into Project.toml
-        @test !haskey(project["rsmd"], "development_status")
+        # A default is written into Project.toml too, where it can be seen
+        @test project["rsmd"]["development_status"] == "active"
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test codemeta["developmentStatus"] == "active"
+    end
+end
+
+@testset "A first crosswalk settles everything" begin
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    # Starting from each of these, a second crosswalk has nothing left to do
+    starts = ["author_details given" => dir -> make_fixture(dir),
+        "authors alone" => dir -> make_fixture(dir, author_details = false),
+        "metadata in codemeta.json alone" => function (dir)
+            make_fixture(dir, author_details = false)
+            return write(joinpath(dir, "codemeta.json"),
+                         """
+                         {
+                             "description": "A fixture package",
+                             "keywords": ["zeta", "alpha"],
+                             "applicationCategory": "metadata"
+                         }
+                         """)
+        end]
+    @testset "$label" for (label, start) in starts
+        mktempdir() do dir
+            start(dir)
+            @test isnothing(ResearchSoftwareMetadata.crosswalk(dir,
+                                                               build = true))
+            cd(git_dir) # crosswalk leaves the working directory changed
+            settled = fixture_files(dir)
+            @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+            cd(git_dir)
+            @test fixture_files(dir) == settled
+        end
+    end
+
+    # An entry in authors that is not well formed is put right at once, and
+    # does not reach the license
+    mktempdir() do dir
+        make_fixture(dir, author_details = false)
+        toml = joinpath(dir, "Project.toml")
+        project = TOML.parsefile(toml)
+        project["authors"] = [
+            "Ann B Smith  <ann@example.com",
+            "bob<bob@example.com>"
+        ]
+        open(toml, "w") do io
+            return TOML.print(io, project)
+        end
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir, build = true))
+        cd(git_dir)
+        settled = fixture_files(dir)
+        project = TOML.parsefile(toml)
+        @test project["authors"] ==
+              ["Ann B Smith <ann@example.com>", "bob <bob@example.com>"]
+        @test occursin("Ann B Smith and bob\n", settled["LICENSE"])
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        cd(git_dir)
+        @test fixture_files(dir) == settled
+    end
+
+    # The run that makes author_details from authors asks for what authors
+    # cannot hold, and no later run does
+    mktempdir() do dir
+        make_fixture(dir, author_details = false)
+        asks(log) = occursin("add each author's ORCID and ROR",
+                             string(log.message))
+        for expected in (1, 0)
+            logger = Test.TestLogger(min_level = Logging.Info)
+            with_logger(logger) do
+                return ResearchSoftwareMetadata.crosswalk(dir)
+            end
+            cd(git_dir)
+            @test count(asks, logger.logs) == expected
+        end
+    end
+
+    # The defaults in use are written into Project.toml on the first run
+    mktempdir() do dir
+        make_fixture(dir)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        cd(git_dir)
+        rsmd = TOML.parsefile(joinpath(dir, "Project.toml"))["rsmd"]
+        @test rsmd["keywords"] == ["julia"]
+        @test rsmd["development_status"] == "active"
     end
 end
 

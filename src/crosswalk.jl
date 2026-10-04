@@ -342,14 +342,17 @@ function run_crosswalk(git_dir::AbstractString; category, keywords,
             end
         end
     else
-        authors = project["authors"]
-        for author in authors
+        for author in project["authors"]
             name, email = parse_author(author)
             detail = OrderedDict{String, Any}("name" => name)
             isnothing(email) || (detail["email"] = email)
             push!(author_data, detail)
+            push!(authors, isnothing(email) ? name : name * " <" * email * ">")
         end
         rsmd["author_details"] = author_data
+        @info "Created author_details in the [rsmd] table of Project.toml " *
+              "from authors, please add each author's ORCID and ROR " *
+              "affiliation there if you can"
     end
 
     # Add authors listed in `authors` but missing from author_details
@@ -451,7 +454,7 @@ function run_crosswalk(git_dir::AbstractString; category, keywords,
                   "from https://spdx.org/licenses/")
     end
 
-    just_names = replace.(project["authors"], r" *<[^>]+> *" => "")
+    just_names = first.(parse_author.(project["authors"]))
     license_content = license_text(spdx["licenseText"], years, just_names)
 
     # A license file left by an earlier run names the authors there were then,

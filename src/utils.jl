@@ -99,7 +99,8 @@ disagrees, or with an informational message when `update` is true, meaning
 the `Project.toml` change is deliberate and should just propagate. If the
 field is missing from `Project.toml` but present in `codemeta.json`, it
 is backfilled into `Project.toml`. If it is absent from both, `default`
-is used for `codemeta.json` (when provided) without being backfilled.
+(when provided) is written into both, so that the value in use can be
+seen and changed in `Project.toml`.
 `to_cm` and `from_cm` convert values between the `Project.toml` and
 `codemeta.json` representations. Returns the `Project.toml`-side value,
 or `nothing` if the field is absent everywhere.
@@ -128,6 +129,8 @@ function reconcile!(project, codemeta, proj_key, cm_key;
         codemeta[cm_key] = to_cm(val)
         return val
     elseif !isnothing(default)
+        @info "Setting $proj_key to its default in Project.toml"
+        project[proj_key] = default
         codemeta[cm_key] = to_cm(default)
         return default
     end
