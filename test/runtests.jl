@@ -36,22 +36,72 @@ end
 end
 
 # Write the named workflow files into a throwaway repository directory and
-# return the operating systems read from them
-function workflow_os(workflows::Pair{String, String}...)
+# return what `f` reads from that directory
+function from_workflows(f::Function, workflows::Pair{String, String}...)
     return mktempdir() do dir
         folder = joinpath(dir, ".github", "workflows")
         mkpath(folder)
         for (name, content) in workflows
             write(joinpath(folder, name), content)
         end
-        return ResearchSoftwareMetadata.get_os_from_workflows(dir)
+        return f(dir)
     end
 end
 
-# The operating systems read from a workflow of one job, `test`, whose entries
-# are given in YAML flow style
-function job_os(entries::String)
-    return workflow_os("a.yaml" => "on: push\njobs: {test: {$entries}}\n")
+# The operating systems read from the named workflow files
+function workflow_os(workflows::Pair{String, String}...)
+    return from_workflows(ResearchSoftwareMetadata.get_os_from_workflows,
+                          workflows...)
+end
+
+# The continuous integration workflow chosen from the named workflow files
+function ci_workflow(workflows::Pair{String, String}...)
+    return from_workflows(ResearchSoftwareMetadata.get_ci_workflow,
+                          workflows...)
+end
+
+# A workflow of one job, `test`, whose entries are given in YAML flow style,
+# started by the events in `on`
+function one_job(entries::String; on::String = "push")
+    return "on: $on\njobs: {test: {$entries}}\n"
+end
+
+# The operating systems read from a workflow of one job
+job_os(entries::String) = workflow_os("a.yaml" => one_job(entries))
+
+# Steps that run the package's tests, through the action and through a script
+const RUNTEST = "steps: [{uses: julia-actions/julia-runtest@v1}]"
+const PKG_TEST = "steps: [{run: \"julia --project -e 'using Pkg; Pkg.test()'\"}]"
+
+# A workflow that does not run the tests, on a runner the package may not use
+const TAGBOT_JOB = "runs-on: ubuntu-latest, " *
+                   "steps: [{uses: JuliaRegistries/TagBot@v1}]"
+const TAGBOT = "TagBot.yaml" => one_job(TAGBOT_JOB, on = "issue_comment")
+
+# A reusable workflow that lints on Linux and runs the tests on the runner it is
+# given
+const CALLED = """
+               on:
+                 workflow_call:
+                   inputs:
+                     os:
+                       required: true
+                       type: string
+               jobs:
+                 lint:
+                   runs-on: ubuntu-latest
+                   steps:
+                     - run: echo lint
+                 tests:
+                   runs-on: \${{ inputs.os }}
+                   steps:
+                     - uses: julia-actions/julia-runtest@v1
+               """
+
+# A workflow of one job that calls `called.yaml` for the runner `os`
+function calling(os::String; on::String = "push")
+    return one_job("uses: ./.github/workflows/called.yaml, with: {os: $os}",
+                   on = on)
 end
 
 @testset "Operating systems from workflows" begin
@@ -169,6 +219,35 @@ end
         @test_logs unknown @test isempty(job_os("uses: ./.github/workflows/a.yaml"))
     end
 
+    @testset "Jobs that run the tests" begin
+        docs = "steps: [{run: make docs}]"
+        # Only the runners of the jobs that run the tests are counted
+        action = one_job("runs-on: windows-latest, $RUNTEST")
+        script = one_job("runs-on: windows-latest, $PKG_TEST")
+        @test workflow_os("CI.yaml" => action, TAGBOT) == ["Windows"]
+        @test workflow_os("CI.yaml" => script, TAGBOT) == ["Windows"]
+        # ... and so are only the jobs of a called workflow that run them
+        @test workflow_os("called.yaml" => CALLED,
+                          "CI.yaml" => calling("windows-latest")) == ["Windows"]
+        # With no job running the tests, every job is counted
+        no_tests = one_job("runs-on: macos-latest, $docs")
+        @test workflow_os("docs.yaml" => no_tests, TAGBOT) == ["Linux", "macOS"]
+        # ... as it is when the runners of those that do cannot be determined
+        self_hosted = one_job("runs-on: self-hosted, $RUNTEST")
+        @test_logs unknown @test workflow_os("CI.yaml" => self_hosted,
+                                             TAGBOT) == ["Linux"]
+        # Test jobs whose runner is unknown are reported, others are not
+        two_tests = """
+                    on: push
+                    jobs:
+                      test: {runs-on: self-hosted, $RUNTEST}
+                      windows: {runs-on: windows-latest, $RUNTEST}
+                      docs: {runs-on: [self-hosted, x64], $docs}
+                    """
+        @test_logs unknown @test workflow_os("CI.yaml" => two_tests, TAGBOT) ==
+                                 ["Windows"]
+    end
+
     @testset "Workflow files" begin
         linux = "on: push\njobs: {test: {runs-on: ubuntu-latest}}\n"
         @test workflow_os("a.yml" => linux) == ["Linux"]
@@ -179,6 +258,62 @@ end
         @test isempty(workflow_os())
         mktempdir() do dir
             @test isempty(ResearchSoftwareMetadata.get_os_from_workflows(dir))
+        end
+    end
+end
+
+@testset "Continuous integration workflow" begin
+    tests = "runs-on: ubuntu-latest, $RUNTEST"
+    no_tests = "runs-on: ubuntu-latest, steps: [{run: make docs}]"
+
+    @testset "Workflows that run the tests" begin
+        @test ci_workflow("whatever.yml" => one_job(tests), TAGBOT) ==
+              "whatever.yml"
+        @test ci_workflow("whatever.yml" =>
+                              one_job("runs-on: ubuntu-latest, $PKG_TEST")) ==
+              "whatever.yml"
+        # A workflow that runs the tests is chosen over one named for them
+        @test ci_workflow("CI.yaml" => one_job(no_tests),
+                          "whatever.yaml" => one_job(tests)) == "whatever.yaml"
+        # The tests may be run by a workflow the job calls
+        @test ci_workflow("called.yaml" => CALLED,
+                          "caller.yaml" => calling("ubuntu-latest")) ==
+              "caller.yaml"
+    end
+
+    @testset "Choosing between workflows" begin
+        on_pr = "[push, pull_request]"
+        scheduled = "{schedule: [{cron: '0 2 * * 0'}]}"
+        # Started by a pull request, then by a push, whatever the names
+        @test ci_workflow("called.yaml" => CALLED,
+                          "CI.yaml" => calling("ubuntu-latest"),
+                          "checks.yaml" => calling("ubuntu-latest", on = on_pr)) ==
+              "checks.yaml"
+        @test ci_workflow("a.yaml" => one_job(tests, on = scheduled),
+                          "b.yaml" => one_job(tests)) == "b.yaml"
+        # Then by name, `testing` before `CI`, then in file name order
+        @test ci_workflow("a.yaml" => one_job(tests),
+                          "CI.yml" => one_job(tests),
+                          "Testing.yml" => one_job(tests)) == "Testing.yml"
+        @test ci_workflow("a.yaml" => one_job(tests),
+                          "CI.yml" => one_job(tests)) == "CI.yml"
+        @test ci_workflow("b.yaml" => one_job(tests),
+                          "a.yaml" => one_job(tests)) == "a.yaml"
+    end
+
+    @testset "No workflow that runs the tests" begin
+        # A conventionally named workflow is taken to be the one
+        @test ci_workflow("CI.yml" => one_job(no_tests), TAGBOT) == "CI.yml"
+        @test ci_workflow("CI.yaml" => one_job(no_tests),
+                          "testing.yaml" => one_job(no_tests)) == "testing.yaml"
+        @test isnothing(ci_workflow(TAGBOT))
+        # A workflow that is only ever called does not run in its own right
+        @test isnothing(ci_workflow("called.yaml" => CALLED))
+        @test isnothing(ci_workflow("CI.yaml" =>
+                                        one_job(tests, on = "workflow_call")))
+        @test isnothing(ci_workflow())
+        mktempdir() do dir
+            @test isnothing(ResearchSoftwareMetadata.get_ci_workflow(dir))
         end
     end
 end
@@ -508,6 +643,39 @@ end
         cd(git_dir) # crosswalk leaves the working directory changed
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test codemeta["operatingSystem"] == ["Linux", "macOS"]
+    end
+end
+
+@testset "Crosswalk finds the CI workflow" begin
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    repo = "https://github.com/example/RSMDFixture.jl"
+    # The workflow that runs the tests, whatever it is called
+    mktempdir() do dir
+        make_fixture(dir, workflows = false)
+        folder = joinpath(dir, ".github", "workflows")
+        mkpath(folder)
+        write(joinpath(folder, "CI.yml"),
+              one_job("runs-on: windows-latest, $RUNTEST"))
+        write(joinpath(folder, first(TAGBOT)), last(TAGBOT))
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        cd(git_dir) # crosswalk leaves the working directory changed
+        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+        @test codemeta["continuousIntegration"] ==
+              repo * "/actions/workflows/CI.yml"
+        @test codemeta["codemeta:contIntegration"]["id"] ==
+              codemeta["continuousIntegration"]
+        @test codemeta["operatingSystem"] == ["Windows"]
+    end
+    # Workflows, but none for continuous integration
+    mktempdir() do dir
+        make_fixture(dir, workflows = false)
+        folder = joinpath(dir, ".github", "workflows")
+        mkpath(folder)
+        write(joinpath(folder, first(TAGBOT)), last(TAGBOT))
+        @test_logs (:warn, r"CI not found") match_mode=:any ResearchSoftwareMetadata.crosswalk(dir)
+        cd(git_dir)
+        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+        @test !haskey(codemeta, "continuousIntegration")
     end
 end
 

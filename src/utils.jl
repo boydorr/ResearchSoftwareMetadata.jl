@@ -232,27 +232,104 @@ end
 const MAX_WORKFLOW_DEPTH = 10
 
 """
-    ResearchSoftwareMetadata.job_runners(job::AbstractDict,
-                                         context::AbstractDict,
-                                         git_dir::AbstractString, depth::Int)
+    ResearchSoftwareMetadata.read_workflows(git_dir::AbstractString)
 
-Return the runner labels a workflow job can run on, or `nothing` if they
-cannot be determined. A job that calls a reusable workflow in the same
-repository runs on that workflow's runners, given the inputs the job
-passes to it; a reusable workflow in another repository cannot be read.
-`depth` counts the reusable workflows followed to reach the job.
+Return the GitHub workflows of the repository at `git_dir` as
+`file => workflow` pairs in file name order: every `.yml` or `.yaml`
+file in `.github/workflows` that holds a mapping. The list is empty if
+the repository has no workflows.
 """
-function job_runners(job::AbstractDict, context::AbstractDict,
-                     git_dir::AbstractString, depth::Int)
-    context = matrix_context(job, context)
-    haskey(job, "runs-on") && return runner_labels(job["runs-on"], context)
+function read_workflows(git_dir::AbstractString)
+    workflows = Pair{String, Any}[]
+    folder = joinpath(git_dir, ".github", "workflows")
+    isdir(folder) || return workflows
+    for file in readdir(folder, join = true)
+        isfile(file) && endswith(file, r"\.ya?ml") || continue
+        workflow = YAML.load_file(file)
+        workflow isa AbstractDict && push!(workflows, file => workflow)
+    end
+
+    return workflows
+end
+
+"""
+    ResearchSoftwareMetadata.called_workflow(job::AbstractDict,
+                                             git_dir::AbstractString,
+                                             depth::Int)
+
+Return the reusable workflow a job calls, or `nothing` if the job calls
+none that can be read: only a workflow in the same repository can be,
+and only while fewer than `MAX_WORKFLOW_DEPTH` have been followed to
+reach the job, which `depth` counts.
+"""
+function called_workflow(job::AbstractDict, git_dir::AbstractString, depth::Int)
     uses = get(job, "uses", nothing)
     uses isa AbstractString && startswith(uses, "./") || return nothing
     depth < MAX_WORKFLOW_DEPTH || return nothing
     file = normpath(joinpath(git_dir, uses))
     isfile(file) || return nothing
     called = YAML.load_file(file)
-    called isa AbstractDict || return nothing
+    return called isa AbstractDict ? called : nothing
+end
+
+# Whether a step of a workflow job runs the package's tests
+function step_runs_tests(step::AbstractDict)
+    uses = get(step, "uses", nothing)
+    uses isa AbstractString &&
+        startswith(uses, "julia-actions/julia-runtest") && return true
+    script = get(step, "run", nothing)
+    return script isa AbstractString && occursin("Pkg.test(", script)
+end
+
+step_runs_tests(step) = false
+
+"""
+    ResearchSoftwareMetadata.runs_tests(job::AbstractDict,
+                                        git_dir::AbstractString, depth::Int)
+
+Check whether a workflow job runs the package's tests: one of its steps
+uses the `julia-actions/julia-runtest` action or runs a script that
+calls `Pkg.test`, or the job calls a reusable workflow in the same
+repository that has such a job. `depth` counts the reusable workflows
+followed to reach the job.
+"""
+function runs_tests(job::AbstractDict, git_dir::AbstractString, depth::Int)
+    steps = get(job, "steps", nothing)
+    steps isa AbstractVector && return any(step_runs_tests, steps)
+    called = called_workflow(job, git_dir, depth)
+    return !isnothing(called) && workflow_runs_tests(called, git_dir, depth + 1)
+end
+
+# Whether any job of a workflow runs the package's tests
+function workflow_runs_tests(workflow::AbstractDict, git_dir::AbstractString,
+                             depth::Int)
+    jobs = get(workflow, "jobs", nothing)
+    jobs isa AbstractDict || return false
+    return any(values(jobs)) do job
+        return job isa AbstractDict && runs_tests(job, git_dir, depth)
+    end
+end
+
+"""
+    ResearchSoftwareMetadata.job_runners(job::AbstractDict,
+                                         context::AbstractDict,
+                                         git_dir::AbstractString, depth::Int;
+                                         tests_only::Bool = false)
+
+Return the runner labels a workflow job can run on, or `nothing` if they
+cannot be determined. A job that calls a reusable workflow in the same
+repository runs on that workflow's runners, given the inputs the job
+passes to it, and on only those of its jobs that run the package's tests
+if `tests_only` is set; a reusable workflow in another repository cannot
+be read. `depth` counts the reusable workflows followed to reach the job.
+"""
+function job_runners(job::AbstractDict, context::AbstractDict,
+                     git_dir::AbstractString, depth::Int;
+                     tests_only::Bool = false)
+    context = matrix_context(job, context)
+    haskey(job, "runs-on") && return runner_labels(job["runs-on"], context)
+    called = called_workflow(job, git_dir, depth)
+    isnothing(called) && return nothing
     inputs = workflow_inputs(called)
     passed = get(job, "with", nothing)
     if passed isa AbstractDict
@@ -266,27 +343,33 @@ function job_runners(job::AbstractDict, context::AbstractDict,
         end
     end
 
-    return workflow_runners(called, inputs, git_dir, depth + 1)
+    return workflow_runners(called, inputs, git_dir, depth + 1,
+                            tests_only = tests_only)
 end
 
 """
     ResearchSoftwareMetadata.workflow_runners(workflow::AbstractDict,
                                               context::AbstractDict,
                                               git_dir::AbstractString,
-                                              depth::Int)
+                                              depth::Int;
+                                              tests_only::Bool = false)
 
 Return the runner labels the jobs of a reusable workflow can run on when
 it is called with the inputs in `context`, or `nothing` if none can be
-determined.
+determined. If `tests_only` is set, only the jobs that run the package's
+tests are counted.
 """
 function workflow_runners(workflow::AbstractDict, context::AbstractDict,
-                          git_dir::AbstractString, depth::Int)
+                          git_dir::AbstractString, depth::Int;
+                          tests_only::Bool = false)
     jobs = get(workflow, "jobs", nothing)
     jobs isa AbstractDict || return nothing
     labels = String[]
     for job in values(jobs)
         job isa AbstractDict || continue
-        found = job_runners(job, context, git_dir, depth)
+        tests_only && !runs_tests(job, git_dir, depth) && continue
+        found = job_runners(job, context, git_dir, depth,
+                            tests_only = tests_only)
         isnothing(found) || append!(labels, found)
     end
 
@@ -298,48 +381,103 @@ end
 
 Return the sorted names of the operating systems ("Linux", "Windows",
 "macOS") that the GitHub workflows of the repository at `git_dir` run
-on, which are presumed to be the ones the software runs on. The list is
-empty if the repository has no workflows.
+the package's tests on, which are presumed to be the ones the software
+runs on. If the jobs that run the tests give none, whether because no job
+is recognised as running them or because their runners cannot be
+determined, the operating systems of every job are returned in their
+place. The list is empty if the repository has no workflows.
 
-Each job's `runs-on` may be a runner label, a list of labels or a runner
-group, and may refer to the job's matrix (`\${{ matrix.os }}`, including
-values given under `include`) or to a workflow input
-(`\${{ inputs.os }}`). A job that calls a reusable workflow in the same
-repository counts the runners of that workflow. A job whose operating
-system cannot be determined is reported and otherwise ignored: one that
-uses any other expression, a self-hosted runner whose labels name no
-operating system, or a reusable workflow from another repository. Matrix
-`exclude` entries and `if` conditions are not taken into account.
+A job runs the tests if it uses the `julia-actions/julia-runtest` action
+or calls `Pkg.test` in a script. Each job's `runs-on` may be a runner
+label, a list of labels or a runner group, and may refer to the job's
+matrix (`\${{ matrix.os }}`, including values given under `include`) or
+to a workflow input (`\${{ inputs.os }}`). A job that calls a reusable
+workflow in the same repository counts the runners of that workflow. A
+job whose operating system cannot be determined is reported and
+otherwise ignored: one that uses any other expression, a self-hosted
+runner whose labels name no operating system, or a reusable workflow
+from another repository. Matrix `exclude` entries and `if` conditions
+are not taken into account.
 """
 function get_os_from_workflows(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
-    workflow_folder = joinpath(git_dir, ".github", "workflows")
-    isdir(workflow_folder) || return String[]
-    files = filter(readdir(workflow_folder, join = true)) do file
-        return isfile(file) && endswith(file, r"\.ya?ml")
-    end
-    platforms = Set{String}()
-    for file in files
-        workflow = YAML.load_file(file)
-        workflow isa AbstractDict || continue
+    tested = Set{String}()
+    untested = Set{String}()
+    # Each job whose operating system is unknown, with whether it runs the tests
+    unknown = Pair{String, Bool}[]
+    for (file, workflow) in read_workflows(git_dir)
         jobs = get(workflow, "jobs", nothing)
         jobs isa AbstractDict || continue
         context = workflow_inputs(workflow)
         for (name, job) in jobs
+            tests = job isa AbstractDict && runs_tests(job, git_dir, 0)
             labels = job isa AbstractDict ?
-                     job_runners(job, context, git_dir, 0) : nothing
+                     job_runners(job, context, git_dir, 0, tests_only = tests) :
+                     nothing
             oses = isnothing(labels) ? String[] :
                    filter(!isnothing, runner_os.(labels))
             if !isempty(oses)
-                union!(platforms, oses)
+                union!(tests ? tested : untested, oses)
             elseif !has_trigger(workflow, "workflow_call")
                 # A reusable workflow is counted through the jobs that call it
-                @info "Cannot determine the operating system for job $name " *
-                      "in $(basename(file)), so ignoring it"
+                push!(unknown, "job $name in $(basename(file))" => tests)
             end
         end
     end
 
-    return sort!(collect(platforms))
+    # The jobs that do not run the tests only matter when the others give nothing
+    for (job, tests) in unknown
+        (tests || isempty(tested)) &&
+            @info "Cannot determine the operating system for $job, " *
+                  "so ignoring it"
+    end
+
+    return sort!(collect(isempty(tested) ? untested : tested))
+end
+
+# Whether a workflow is started by any event other than a call from another
+# workflow, so that it runs in its own right
+function has_own_trigger(workflow::AbstractDict)
+    return own_trigger(get(workflow, "on", nothing))
+end
+
+own_trigger(triggers::AbstractDict) = any(!=("workflow_call"), keys(triggers))
+own_trigger(triggers::AbstractVector) = any(!=("workflow_call"), triggers)
+own_trigger(triggers::AbstractString) = triggers != "workflow_call"
+own_trigger(triggers) = false
+
+# Rank of a workflow file by how conventional its name is for the workflow that
+# runs the tests: `testing` first, then `CI`, in any case and with either extension
+function ci_name_rank(file::AbstractString)
+    stem = lowercase(first(splitext(basename(file))))
+    return stem == "testing" ? 0 : stem == "ci" ? 1 : 2
+end
+
+"""
+    ResearchSoftwareMetadata.get_ci_workflow(git_dir)
+
+Return the file name of the GitHub workflow that carries out continuous
+integration for the repository at `git_dir`, or `nothing` if there is
+none. It is a workflow that runs in its own right, not only when called
+by another, and that either has a job running the package's tests (see
+[`ResearchSoftwareMetadata.runs_tests`](@ref)) or is named `testing` or
+`CI`. Where there are several, a workflow that runs the tests is chosen
+over one that does not, then one started by a pull request, then one
+started by a push, then one named `testing`, then one named `CI`, then
+the first in file name order.
+"""
+function get_ci_workflow(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
+    ranked = Tuple{Bool, Bool, Bool, Int, String}[]
+    for (file, workflow) in read_workflows(git_dir)
+        has_own_trigger(workflow) || continue
+        tests = workflow_runs_tests(workflow, git_dir, 0)
+        name_rank = ci_name_rank(file)
+        tests || name_rank < 2 || continue
+        push!(ranked,
+              (!tests, !has_trigger(workflow, "pull_request"),
+               !has_trigger(workflow, "push"), name_rank, basename(file)))
+    end
+
+    return isempty(ranked) ? nothing : last(minimum(ranked))
 end
 
 """

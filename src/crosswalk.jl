@@ -479,20 +479,18 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     else
         if haskey(codemeta, "codemeta:contIntegration")
             codemeta["continuousIntegration"] = codemeta["codemeta:contIntegration"]["id"]
-        elseif isfile(".github/workflows/testing.yaml")
-            @info "Using .github/workflows/testing.yaml for CI"
-            codemeta["continuousIntegration"] = urls[repo_index] *
-                                                "/actions/workflows/testing.yaml"
-            codemeta["codemeta:contIntegration"] = Dict("id" =>
-                                                            codemeta["continuousIntegration"])
-        elseif isfile(".github/workflows/CI.yaml")
-            @info "Using .github/workflows/CI.yaml for CI"
-            codemeta["continuousIntegration"] = urls[repo_index] *
-                                                "/actions/workflows/CI.yaml"
-            codemeta["codemeta:contIntegration"] = Dict("id" =>
-                                                            codemeta["continuousIntegration"])
-        elseif isdir(".github/workflows")
-            @warn "CI not found in codemeta.json, but .github/workflows exists"
+        else
+            ci_workflow = get_ci_workflow(git_dir)
+            if !isnothing(ci_workflow)
+                @info "Using .github/workflows/$ci_workflow for CI"
+                codemeta["continuousIntegration"] = urls[repo_index] *
+                                                    "/actions/workflows/" *
+                                                    ci_workflow
+                codemeta["codemeta:contIntegration"] = Dict("id" =>
+                                                                codemeta["continuousIntegration"])
+            elseif isdir(joinpath(git_dir, ".github", "workflows"))
+                @warn "CI not found in codemeta.json, but .github/workflows exists"
+            end
         end
     end
 
