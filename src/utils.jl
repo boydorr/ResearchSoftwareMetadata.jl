@@ -27,6 +27,25 @@ function parse_author(author::AbstractString)
 end
 
 """
+    ResearchSoftwareMetadata.read_json(file::AbstractString)
+
+Read a JSON metadata file such as `codemeta.json` into an `OrderedDict`.
+Throws an error that names the file if it cannot be parsed or does not
+hold a JSON object.
+"""
+function read_json(file::AbstractString)
+    contents = try
+        JSON.parsefile(file, dicttype = OrderedDict)
+    catch err
+        error("Unable to read $(basename(file)): " * sprint(showerror, err))
+    end
+    contents isa AbstractDict ||
+        error("Unable to read $(basename(file)): it does not hold a JSON object")
+
+    return contents
+end
+
+"""
     ResearchSoftwareMetadata.reconcile!(project, codemeta, proj_key, cm_key;
                                         value = nothing, default = nothing,
                                         to_cm = identity, from_cm = identity,

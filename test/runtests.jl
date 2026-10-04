@@ -679,6 +679,52 @@ end
     end
 end
 
+@testset "Metadata files that cannot be read" begin
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    # A missing comma between two entries of a list
+    broken = """
+             {
+                 "creators": [
+                     {"name": "Smith, Ann B"}
+                     {"name": "Jones, Bob"}
+                 ]
+             }
+             """
+    mktempdir() do dir
+        file = joinpath(dir, "codemeta.json")
+        write(file, broken)
+        @test_throws "Unable to read codemeta.json" ResearchSoftwareMetadata.read_json(file)
+        write(file, "[1, 2]\n")
+        @test_throws "does not hold a JSON object" ResearchSoftwareMetadata.read_json(file)
+        write(file, "{\"name\": \"Fixture\"}\n")
+        @test ResearchSoftwareMetadata.read_json(file)["name"] == "Fixture"
+    end
+    # .zenodo.json is rewritten whatever it holds, so the crosswalk carries on,
+    # whether or not the file would have been used as a source of authors
+    lost = (:warn, r"Unable to read \.zenodo\.json.*has been overwritten")
+    for author_details in (false, true)
+        mktempdir() do dir
+            make_fixture(dir, author_details = author_details)
+            write(joinpath(dir, ".zenodo.json"), broken)
+            @test_logs lost match_mode=:any ResearchSoftwareMetadata.crosswalk(dir)
+            cd(git_dir) # crosswalk leaves the working directory changed
+            zenodo = JSON.parsefile(joinpath(dir, ".zenodo.json"))
+            @test [c["name"] for c in zenodo["creators"]] == ["Smith, Ann B"]
+        end
+    end
+    # codemeta.json holds metadata kept nowhere else, so the crosswalk stops
+    mktempdir() do dir
+        project_content, src_content = make_fixture(dir)
+        write(joinpath(dir, "codemeta.json"), broken)
+        @test_throws "Unable to read codemeta.json" ResearchSoftwareMetadata.crosswalk(dir)
+        cd(git_dir) # crosswalk leaves the working directory changed
+        @test read(joinpath(dir, "codemeta.json"), String) == broken
+        @test read(joinpath(dir, "Project.toml"), String) == project_content
+        @test !isfile(joinpath(dir, ".zenodo.json"))
+        @test !isfile(joinpath(dir, "LICENSE"))
+    end
+end
+
 @testset "Source file headers" begin
     git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     header = "# SPDX-License-Identifier: MIT"

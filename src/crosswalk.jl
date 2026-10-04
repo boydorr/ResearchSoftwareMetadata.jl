@@ -54,9 +54,21 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     repos = replace.(urls, r"^.*/([^/]+)$" => s"\1")
 
     file = joinpath(git_dir, "codemeta.json")
-    codemeta = isfile(file) ?
-               JSON.parsefile(file, dicttype = OrderedDict) :
-               OrderedDict{String, Any}()
+    codemeta = isfile(file) ? read_json(file) : OrderedDict{String, Any}()
+
+    # .zenodo.json is rewritten whatever it holds, so one that cannot be read
+    # is no reason to stop, but what it held is lost
+    file = joinpath(git_dir, ".zenodo.json")
+    zenodo = OrderedDict{String, Any}()
+    zenodo_problem = nothing
+    if isfile(file)
+        try
+            zenodo = read_json(file)
+        catch err
+            err isa ErrorException || rethrow()
+            zenodo_problem = first(split(err.msg, '\n'))
+        end
+    end
 
     codemeta["@context"] = "https://w3id.org/codemeta/3.0"
     codemeta["type"] = "SoftwareSourceCode"
@@ -198,13 +210,9 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         if !isempty(get(codemeta, "author", []))
             details = author_details_from_codemeta(codemeta["author"])
             source = "codemeta.json"
-        elseif isfile(joinpath(git_dir, ".zenodo.json"))
-            zenodo = JSON.parsefile(joinpath(git_dir, ".zenodo.json"),
-                                    dicttype = OrderedDict)
-            if !isempty(get(zenodo, "creators", []))
-                details = author_details_from_zenodo(zenodo["creators"])
-                source = ".zenodo.json"
-            end
+        elseif !isempty(get(zenodo, "creators", []))
+            details = author_details_from_zenodo(zenodo["creators"])
+            source = ".zenodo.json"
         end
         if !isnothing(details)
             if author_details_consistent(details, project["authors"])
@@ -596,6 +604,9 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     open(file, "w") do io
         return JSON.print(io, crosswalk_d, 4)
     end
+    isnothing(zenodo_problem) ||
+        @warn "$zenodo_problem. It has been overwritten, and any " *
+              "information in it has been lost"
 
     for (jl_file, content) in headers
         write(jl_file, content)
