@@ -972,7 +972,7 @@ end
         # Added after the fixture's commit, so none of these is tracked
         before = Dict("src/empty.jl" => "",
                       "src/bare.jl" => "x = 1\n",
-                      "src/other.jl" => "# SPDX-License-Identifier: ISC\n\nx = 1\n",
+                      "src/unnamed.jl" => "# SPDX-License-Identifier:\n\nx = 1\n",
                       "test/deep/with space δ.jl" => "x = 1\n",
                       "src/done.jl" => "$header\n\nx = 1",
                       "src/notebook.jl" => "### A Pluto.jl notebook ###\nx = 1",
@@ -980,7 +980,7 @@ end
                       ".gitignore" => "scratch/\n")
         after = Dict("src/empty.jl" => "$header\n",
                      "src/bare.jl" => "$header\n\nx = 1\n",
-                     "src/other.jl" => "$header\n\nx = 1\n",
+                     "src/unnamed.jl" => "$header\n\nx = 1\n",
                      "test/deep/with space δ.jl" => "$header\n\nx = 1\n")
         for (name, content) in before
             mkpath(dirname(joinpath(dir, name)))
@@ -1007,6 +1007,82 @@ end
         rm(joinpath(dir, "src", "RSMDFixture.jl"))
         @test isempty(ResearchSoftwareMetadata.source_files(dir))
         @test isempty(ResearchSoftwareMetadata.header_changes(dir, "MIT"))
+    end
+end
+
+# Declare the licenses that some files of a fixture are under instead of its own
+function declare_additional(dir, licenses)
+    toml = joinpath(dir, "Project.toml")
+    project = TOML.parsefile(toml)
+    get!(project, "rsmd", Dict{String, Any}())["additional_licenses"] = licenses
+    open(toml, "w") do io
+        return TOML.print(io, project)
+    end
+end
+
+@testset "Files under another license" begin
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    changes = ResearchSoftwareMetadata.header_changes
+    other = "# SPDX-License-Identifier: BSD-3-Clause\n\nx = 1\n"
+    either = "# SPDX-License-Identifier: MIT OR BSD-3-Clause\n\nx = 1\n"
+
+    @test ResearchSoftwareMetadata.header_licenses.(["MIT", "MIT OR Apache-2.0",
+                                                        "(GPL-2.0-only WITH " *
+                                                        "Classpath-exception-2.0) " *
+                                                        "AND MIT", ""]) ==
+          [["MIT"], ["MIT", "Apache-2.0"], ["GPL-2.0-only", "MIT"], String[]]
+
+    mktempdir() do dir
+        make_fixture(dir)
+        file = joinpath(dir, "src", "other.jl")
+        write(file, other)
+        # A license the package has not declared is an error naming the file,
+        # one it has declared is left, and one it is moving from is replaced
+        @test_throws "src/other.jl: BSD-3-Clause" changes(dir, "MIT")
+        @test isempty(changes(dir, "MIT", additional = ["BSD-3-Clause"]))
+        @test changes(dir, "MIT", previous = ["BSD-3-Clause"]) ==
+              [file => "# SPDX-License-Identifier: MIT\n\nx = 1\n"]
+        # Every license in a choice of licenses has to be one the package has
+        write(joinpath(dir, "src", "either.jl"), either)
+        @test_throws "src/either.jl: MIT OR BSD-3-Clause" changes(dir, "MIT",
+                                                                  previous = ["BSD-3-Clause"])
+        @test isempty(changes(dir, "MIT", additional = ["BSD-3-Clause"]))
+        rm(joinpath(dir, "src", "either.jl"))
+
+        # The crosswalk stops, deliberate change of license or not, and
+        # changes nothing
+        before = fixture_files(dir)
+        @test_throws "additional_licenses" ResearchSoftwareMetadata.crosswalk(dir)
+        @test_throws "src/other.jl: BSD-3-Clause" ResearchSoftwareMetadata.crosswalk(dir,
+                                                                                     update = true)
+        cd(git_dir) # crosswalk leaves the working directory changed
+        @test fixture_files(dir) == before
+
+        # Once the license is declared the file is left as it is ...
+        declare_additional(dir, ["BSD-3-Clause"])
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        cd(git_dir)
+        @test read(file, String) == other
+        @test fixture_licenses(dir) == all_licensed("MIT")
+        project = TOML.parsefile(joinpath(dir, "Project.toml"))
+        @test project["rsmd"]["additional_licenses"] == ["BSD-3-Clause"]
+        # ... and stays so when the package changes license, while the files
+        # that were under the package's license follow it
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir,
+                                                           license = "BSD-2-Clause"))
+        cd(git_dir)
+        @test read(file, String) == other
+        @test fixture_licenses(dir) == all_licensed("BSD-2-Clause")
+    end
+
+    # An additional license has to be one SPDX recognises
+    mktempdir() do dir
+        make_fixture(dir)
+        declare_additional(dir, ["nonsense"])
+        before = fixture_files(dir)
+        @test_throws "`nonsense` in additional_licenses is not a recognised" ResearchSoftwareMetadata.crosswalk(dir)
+        cd(git_dir)
+        @test fixture_files(dir) == before
     end
 end
 

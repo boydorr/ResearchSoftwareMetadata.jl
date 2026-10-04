@@ -30,6 +30,10 @@ throws an error if there is none or if it is not one SPDX recognises. The `licen
 sets or changes it, and like `category` is written back into `Project.toml`. A license in
 `Project.toml` that differs from the one already in `codemeta.json` is an error, and
 nothing is changed, unless `update` is true or the `license` argument is given.
+Every julia source file is given a first line naming the license. A file that is deliberately
+under a different license keeps its own first line, provided that license is listed under
+`additional_licenses` in the `[rsmd]` table; a file marked with any other license is an
+error, and nothing is changed.
 If any remote metadata query (orcid.org, ror.org, spdx.org,
 doi.org or Julia's General registry) cannot be completed, the crosswalk throws an error and
 all files are left in their original state.
@@ -352,28 +356,35 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
               "`license = \"LGPL-3.0-or-later\"` to Project.toml, using " *
               LICENSE_ADVICE)
     end
+    # The licenses the package is being moved from, if this run changes it
+    previous_licenses = String[]
     for (place, held) in ("codemeta.json" => recorded,
                           "Project.toml" => get(project, "license", nothing))
-        isnothing(held) || held == license_id ||
-            @info "Changing license in $place from $held to $license_id"
+        held isa AbstractString && held ≠ license_id || continue
+        @info "Changing license in $place from $held to $license_id"
+        push!(previous_licenses, held)
     end
     project["license"] = license_id
     codemeta["license"] = "https://spdx.org/licenses/" * license_id
 
-    url = "https://spdx.org/licenses/$license_id.json"
-    response = HTTP.get(url, ["Accept" => "application/json"],
-                        status_exception = false)
-    response.status == 404 &&
+    spdx = get_license_from_spdx(license_id)
+    isnothing(spdx) &&
         error("`$license_id` is not a recognised SPDX license identifier. " *
               "Use " * LICENSE_ADVICE)
-    response.status == 200 ||
-        error("Unable to fetch license text for $license_id from " *
-              "spdx.org, HTTP status $(response.status)")
+    open_license = spdx["isOsiApproved"]
 
-    json = JSON.parse(String(response.body))
-    open_license = json["isOsiApproved"]
+    # Licenses the package declares that some of its files are under instead
+    additional_licenses = String.(vcat(get(rsmd, "additional_licenses",
+                                           String[])))
+    for additional in additional_licenses
+        isnothing(get_license_from_spdx(additional)) &&
+            error("`$additional` in additional_licenses is not a " *
+                  "recognised SPDX license identifier. Use an identifier " *
+                  "from https://spdx.org/licenses/")
+    end
+
     just_names = replace.(project["authors"], r" *<[^>]+> *" => "")
-    license_content = license_text(json["licenseText"], years, just_names)
+    license_content = license_text(spdx["licenseText"], years, just_names)
 
     # A license file left by an earlier run names the authors there were then,
     # which are the ones still in codemeta.json
@@ -385,12 +396,9 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         isnothing(family) ||
             push!(earlier_names, isnothing(given) ? family : "$given $family")
     end
-    earlier_content = license_text(json["licenseText"], years, earlier_names)
-    license_changes = license_file_changes(git_dir, license_id,
-                                           [
-                                               license_content,
-                                               earlier_content
-                                           ],
+    generated = [license_content,
+        license_text(spdx["licenseText"], years, earlier_names)]
+    license_changes = license_file_changes(git_dir, license_id, generated,
                                            replace = update ||
                                                      !isnothing(license))
 
@@ -584,7 +592,9 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     # Round-trip to ensure correct order if there were elements missing
     project = order_project(TOML.parse(sprint(TOML.print, project)))
 
-    new_headers = header_changes(git_dir, license_id)
+    new_headers = header_changes(git_dir, license_id,
+                                 additional = additional_licenses,
+                                 previous = previous_licenses)
 
     # All remote queries have succeeded, so the files can now be written
     if license_changes.write

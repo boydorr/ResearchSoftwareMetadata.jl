@@ -201,3 +201,108 @@ function describe_license_files(git_dir::AbstractString)
 
     return join(sentences)
 end
+
+"""
+    ResearchSoftwareMetadata.source_files(git_dir::AbstractString)
+
+Return the paths of the julia source files of the repository at
+`git_dir`: every `.jl` file that git tracks, or would track because it is
+not ignored. Files that git ignores and the contents of submodules are
+not included.
+"""
+function source_files(git_dir::AbstractString)
+    # NUL-separated, so that git does not quote unusual file names. Precomposed
+    # unicode has to be off: with it on, as it is by default on macOS, the git
+    # that Git.jl supplies cannot convert file names, and fails to scan a
+    # working tree that has any file whose name is not ASCII. The names then
+    # come back as they are on disk, which is what opening them needs.
+    listing = read(`$(Git.git()) -c core.precomposeunicode=false -C $git_dir
+                    ls-files -z --cached --others --exclude-standard -- '*.jl'`,
+                   String)
+    files = joinpath.(git_dir, split(listing, '\0', keepempty = false))
+    return unique!(filter!(isfile, files))
+end
+
+"""
+    ResearchSoftwareMetadata.header_licenses(expression::AbstractString)
+
+Return the license identifiers named in the SPDX expression of a source
+file header: the one identifier of a plain header, and each of those
+joined by `AND` or `OR` in a compound one. The exception that follows a
+`WITH` is not a license and is left out.
+"""
+function header_licenses(expression::AbstractString)
+    licenses = String[]
+    exception_next = false
+    for token in split(replace(expression, r"[()]" => " "))
+        if exception_next
+            exception_next = false
+        elseif uppercase(token) == "WITH"
+            exception_next = true
+        elseif uppercase(token) ∉ ("AND", "OR")
+            push!(licenses, token)
+        end
+    end
+
+    return licenses
+end
+
+"""
+    ResearchSoftwareMetadata.header_changes(git_dir::AbstractString,
+                                            license::AbstractString;
+                                            additional::AbstractVector = String[],
+                                            previous::AbstractVector = String[])
+
+Return the julia source files of the repository at `git_dir` whose first
+line has to change for the package to be licensed under `license`, as
+`file => new content` pairs. Nothing is written.
+
+A file without an SPDX header gains one for `license`, followed by a blank
+line, and an empty file becomes the header alone. A header is left as it
+is if every license it names is `license` or one of the `additional`
+licenses the package declares. A header naming one of the `previous`
+licenses, which the package is being moved from, is changed to `license`.
+A header naming any other license is an error, listing every such file,
+since changing it would change the licensing of the file. Pluto notebooks,
+whose first line Pluto needs, are passed over.
+"""
+function header_changes(git_dir::AbstractString, license::AbstractString;
+                        additional::AbstractVector = String[],
+                        previous::AbstractVector = String[])
+    prefix = "# SPDX-License-Identifier:"
+    header = "$prefix $license"
+    allowed = vcat(license, additional)
+    changes = Pair{String, String}[]
+    undeclared = String[]
+    for file in source_files(git_dir)
+        lines = readlines(file)
+        if isempty(lines)
+            lines = [header]
+        elseif startswith(first(lines), prefix)
+            named = strip(chopprefix(first(lines), prefix))
+            licenses = header_licenses(named)
+            if !isempty(licenses) && all(in(allowed), licenses)
+                continue
+            elseif isempty(licenses) || named in previous
+                lines[1] = header
+            else
+                push!(undeclared, "  $(relpath(file, git_dir)): $named")
+                continue
+            end
+        elseif startswith(first(lines), "### A Pluto.jl notebook ###")
+            continue
+        else
+            pushfirst!(lines, header, "")
+        end
+        push!(changes, file => join(lines, "\n") * "\n")
+    end
+    isempty(undeclared) ||
+        error("These files are marked with a license that is neither " *
+              "$license nor one of the package's additional licenses:\n" *
+              join(undeclared, "\n") * "\nNothing has been changed. If a " *
+              "file is meant to have that license, add the license to " *
+              "`additional_licenses` in the [rsmd] table of Project.toml; " *
+              "if not, correct the first line of the file")
+
+    return changes
+end

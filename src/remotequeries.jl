@@ -84,6 +84,25 @@ function get_organisation_from_ror(ror::String)
 end
 
 """
+    ResearchSoftwareMetadata.get_license_from_spdx(license::AbstractString)
+
+Take an SPDX license identifier and query spdx.org to return a Dict
+containing its record, including the text of the license under
+`licenseText` and whether the OSI approves it under `isOsiApproved`, or
+nothing if spdx.org has no license with that identifier. Throws an error
+if spdx.org cannot be reached or returns an unexpected HTTP status.
+"""
+function get_license_from_spdx(license::AbstractString)
+    url = "https://spdx.org/licenses/$license.json"
+    headers = ["Accept" => "application/json"]
+    response = HTTP.get(url, headers, status_exception = false)
+    response.status == 200 && return JSON.parse(String(response.body))
+    response.status == 404 && return nothing
+    return error("Unable to fetch license text for $license from " *
+                 "spdx.org, HTTP status $(response.status)")
+end
+
+"""
     ResearchSoftwareMetadata.check_doi(doi::String)
 
 Check that a DOI resolves by querying the doi.org handle API. Returns
