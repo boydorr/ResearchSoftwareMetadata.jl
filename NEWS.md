@@ -1,5 +1,16 @@
 # NEWS
 
+- v0.4.0
+  - Breaking changes
+    - Licensing now changes only when asked: a license in Project.toml that disagrees with codemeta.json, a license file holding another license, or a source file marked with an undeclared license stops the crosswalk and changes nothing, where these were logged, partly applied or rewritten. Use `update = true`, the new `license` argument or `relicense!()` to change a license, and `additional_licenses` in [rsmd] for files deliberately under another one
+    - Existing metadata changes once on the next crosswalk: README links become blob/HEAD so that they follow the default branch, macOS runners are reported as macOS, and default keywords and development status are written into [rsmd]
+    - `crosswalk()` no longer changes the working directory
+  - Add `relicense!()` to move a whole package to a new license, and a clear error suggesting licenses when a package has none or one that is not an SPDX identifier
+  - Leave alone a license file the crosswalk did not write, provided it holds the declared license (uses LicenseCheck.jl)
+  - Read operating systems and the CI workflow from the jobs that run the tests, including reusable workflows
+  - Cope with SSH remotes, tags that are not releases, empty source files and unreadable metadata files
+  - Settle everything in a single crosswalk on first use; use UTC dates, and keep the dates of an unreleased version on branches other than the default
+  - Mark the entry points as public (not exported)
 - v0.3.1
   - Dependency fix to avoid updating other packages
 - v0.3.0
