@@ -12,7 +12,7 @@ export is_repo_clean
 Determine whether the git repository at `repo_path` is clean, reporting on its state.
 
 The short-format status (`git status -s`) of the repository is split into three
-categories using the two status columns of each entry — the first column records
+categories using the two status columns of each entry: the first column records
 changes staged in the index, the second records changes in the working tree:
 
   - **staged**: tracked files with changes recorded in the index;
@@ -38,7 +38,11 @@ otherwise.
 function is_repo_clean(repo_path; strict = false)
     # Short-format porcelain status: each entry is "XY path", where column X is the
     # index (staged) status and column Y is the working-tree status.
-    statuses = readlines(`$(Git.git()) status -s $repo_path`)
+    # Precomposed unicode has to be off: with it on, as it is by default on macOS,
+    # the git that Git.jl supplies fails to scan a working tree that has any file
+    # whose name is not ASCII.
+    statuses = readlines(`$(Git.git()) -c core.precomposeunicode=false
+                          -C $repo_path status -s`)
 
     untracked = filter(s -> startswith(s, "??"), statuses)
     unstaged = filter(s -> !startswith(s, "??") && s[2] != ' ', statuses)

@@ -7,17 +7,17 @@
     "codeRepository": "https://github.com/boydorr/ResearchSoftwareMetadata.jl",
     "name": "ResearchSoftwareMetadata.jl",
     "issueTracker": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/issues",
-    "readme": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/main/README.md",
-    "buildInstructions": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/main/README.md",
+    "readme": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/HEAD/README.md",
+    "buildInstructions": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/HEAD/README.md",
     "dateCreated": "2024-07-17",
     "operatingSystem": [
         "Linux",
         "macOS"
     ],
-    "version": "v0.3.1",
-    "dateModified": "2026-07-09",
+    "version": "v0.4.0",
+    "dateModified": "2026-10-04",
     "datePublished": "2024-07-18",
-    "downloadUrl": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/archive/refs/tags/v0.3.1.tar.gz",
+    "downloadUrl": "https://github.com/boydorr/ResearchSoftwareMetadata.jl/archive/refs/tags/v0.4.0.tar.gz",
     "license": "https://spdx.org/licenses/MIT",
     "author": [
         {

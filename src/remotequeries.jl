@@ -84,6 +84,25 @@ function get_organisation_from_ror(ror::String)
 end
 
 """
+    ResearchSoftwareMetadata.get_license_from_spdx(license::AbstractString)
+
+Take an SPDX license identifier and query spdx.org to return a Dict
+containing its record, including the text of the license under
+`licenseText` and whether the OSI approves it under `isOsiApproved`, or
+nothing if spdx.org has no license with that identifier. Throws an error
+if spdx.org cannot be reached or returns an unexpected HTTP status.
+"""
+function get_license_from_spdx(license::AbstractString)
+    url = "https://spdx.org/licenses/$license.json"
+    headers = ["Accept" => "application/json"]
+    response = HTTP.get(url, headers, status_exception = false)
+    response.status == 200 && return JSON.parse(String(response.body))
+    response.status == 404 && return nothing
+    return error("Unable to fetch license text for $license from " *
+                 "spdx.org, HTTP status $(response.status)")
+end
+
+"""
     ResearchSoftwareMetadata.check_doi(doi::String)
 
 Check that a DOI resolves by querying the doi.org handle API. Returns
@@ -103,9 +122,10 @@ end
     ResearchSoftwareMetadata.get_first_release_date()
 
 Returns the first release date of this package on Julia's `General`
-Registry, or today's date if the package has not been registered yet.
-Throws an error if the registry cannot be reached or returns an
-unexpected HTTP status.
+Registry, or `nothing` if the package has not been registered. The date is
+that of the repository's tag for the release. Throws an error if the
+repository has no such tag, or if the registry cannot be reached or
+returns an unexpected HTTP status.
 """
 function get_first_release_date(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
     project = read_project(git_dir)
@@ -117,12 +137,18 @@ function get_first_release_date(git_dir = readchomp(`$(Git.git()) rev-parse --sh
     if response.status == 200
         data = TOML.parse(String(response.body))
         version = minimum(VersionNumber.(keys(data)))
-        cd(git_dir)
-        date = readchomp(`$(Git.git()) log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/v$version`)
-        return date
+        releases = release_tags(git_dir)
+        release = findfirst(release -> release.version == version, releases)
+        isnothing(release) &&
+            error("The repository has no tag for v$version, the first " *
+                  "release of $package in Julia's General registry, which " *
+                  "is where the date of that release is taken from. Fetch " *
+                  "the tags of the repository: a shallow clone has none")
+        tag = releases[release].name
+        return readchomp(`$(Git.git()) -C $git_dir log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/$tag`)
     elseif response.status == 404
-        @info "No release yet on General, imputing first release will be today"
-        return string(today())
+        @info "No release yet on General"
+        return nothing
     end
 
     return error("Unable to query Julia's General registry for $package, " *

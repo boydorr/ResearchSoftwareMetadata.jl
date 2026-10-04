@@ -2,61 +2,182 @@
 
 """
     crosswalk(git_dir; category = nothing, keywords = nothing,
-              build = false, update = false)
+              license = nothing, build = false, update = false)
 
-Runs a crosswalk across `Project.toml`, `LICENSE`, `codemeta.json` and `.zenodo.json` as
-well as the julia source files to enforce consistency between the different metadata formats.
-It logs warnings and errors if it identifies inconsistencies while it is editing the files.
+Run a crosswalk across `Project.toml`, `codemeta.json`, `.zenodo.json`, the license file
+and the julia source files of a package, to enforce consistency between the different
+metadata formats, and return `nothing`.
+
 `Project.toml` is the authoritative source of metadata: as well as its standard fields, the
 optional keys `description`, `keywords`, `category`, `development_status` and
 `publications` (a vector of DOIs of associated papers) in its `[rsmd]` table are propagated
 into `codemeta.json` and `.zenodo.json`; values found only in `codemeta.json` are backfilled
 into `Project.toml`. Legacy top-level copies of these keys are migrated into `[rsmd]`.
-A missing `author_details` section is likewise constructed from `codemeta.json` or
+The crosswalk logs warnings and errors if it identifies inconsistencies while it is editing
+the files.
+
+# Arguments
+
+  - `git_dir`: the repository holding the package. It defaults to the repository that
+    the working directory is in.
+  - `category`: the software category. It takes precedence over the one in `Project.toml`
+    and is written back into it.
+  - `keywords`: a vector of keyword strings, which likewise takes precedence and is
+    written back.
+  - `license`: an [SPDX identifier](https://spdx.org/licenses/) such as `"MIT"`, to set the
+    license of the package or to change it. It is written back into `Project.toml`.
+  - `build`: where the build instructions are, for the `buildInstructions` RSMD field.
+    `false` leaves the instructions as is, `true` sets it to the same as the README, and a
+    string sets it to that value.
+  - `update`: if true, changes to `Project.toml` (e.g. to the version or the license) are
+    treated as deliberate and propagated to the other metadata files with `@info` messages
+    instead of being reported as warnings or errors.
+
+# Authors
+
+A missing `author_details` section in `[rsmd]` is constructed from `codemeta.json` or
 `.zenodo.json`, provided the information there is consistent with the definitive `authors`
-field. New entries in `authors` are propagated into `rsmd.author_details` (with a warning to
-add their ORCID and ROR affiliation there), `codemeta.json` and `.zenodo.json`, while authors
-in `codemeta.json` that are missing from `authors` are removed with an error.
-The software category can be set with the `category` argument, likewise the `keywords`
-argument can contain a vector of keyword strings; both take precedence over and are written
-back into `Project.toml`. The `build` argument sets the `buildInstructions` RSMD
-field - `false` leaves the instructions as is, `true` sets it to the same as the README,
-and a string sets it to that value. If `update` is true, changes to `Project.toml` (e.g. to
-the version or the license) are treated as deliberate and propagated to the other metadata
-files with `@info` messages instead of being reported as warnings or errors.
-If any remote metadata query (orcid.org, ror.org, spdx.org,
-doi.org or Julia's General registry) cannot be completed, the crosswalk throws an error and
-all files are left in their original state.
+field, and otherwise from `authors` itself. New entries in `authors` are propagated into
+`rsmd.author_details` (with a warning to add their ORCID and ROR affiliation there),
+`codemeta.json` and `.zenodo.json`, while authors in `codemeta.json` that are missing from
+`authors` are removed with an error.
+
+# License
+
+The license is an SPDX identifier, taken from the `license` argument, from `license` in
+`Project.toml` or, failing that, from `codemeta.json`; the crosswalk throws an error if
+there is none or if it is not one SPDX recognises. A license in `Project.toml` that
+differs from the one already in `codemeta.json` is an error, and nothing is changed, unless
+`update` is true or the `license` argument is given.
+
+If the package has no license file, a `LICENSE` is written. A license file that the
+crosswalk did not write is left as it is if it holds the license, and is an error if it
+does not, unless the license is being changed.
+
+Every julia source file is given a first line naming the license. A file that is
+deliberately under a different license keeps its own first line, provided that license is
+listed under `additional_licenses` in the `[rsmd]` table; a file marked with any other
+license is an error, and nothing is changed.
+
+# Dates
+
+The dates of a version that has no release tag yet are today's date, in UTC, whenever the
+crosswalk is run on the repository's default branch or with `update` true; on any other
+branch the dates already recorded for that version are kept.
+
+# Failure
+
+If any remote metadata query (orcid.org, ror.org, spdx.org, doi.org or Julia's General
+registry) cannot be completed, the crosswalk throws an error and all files are left in
+their original state.
 """
 function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`);
-                   category = nothing, keywords = nothing, build = false,
-                   update = false)
+                   category = nothing, keywords = nothing,
+                   license::Union{AbstractString, Nothing} = nothing,
+                   build = false, update = false)
+    return run_crosswalk(git_dir, category = category, keywords = keywords,
+                         license = license, build = build, update = update,
+                         overwrite_all = false)
+end
+
+"""
+    relicense!(license, git_dir; overwrite_all = false)
+
+Relicense a package, and run a crosswalk to carry the change into every
+metadata file.
+
+# Arguments
+
+  - `license`: the [SPDX identifier](https://spdx.org/licenses/) of the new
+    license, such as `"MIT"`.
+  - `git_dir`: the repository holding the package. It defaults to the
+    repository that the working directory is in.
+  - `overwrite_all`: if true, replace every existing license file and source
+    file header and drop `additional_licenses`, keeping nothing of the
+    existing licensing. The default, false, respects what the package has
+    declared.
+
+# Keeping or overwriting the existing licensing
+
+As it stands this is `crosswalk(git_dir, license = license)`: `Project.toml`,
+`codemeta.json` and `.zenodo.json` take the new license, the `LICENSE` file is
+written for it, and the julia source files that were marked with the old
+license are marked with the new one. Files marked with one of the
+`additional_licenses` of the `[rsmd]` table are left as they are, and the
+crosswalk still stops, changing nothing, if a file is marked with a license
+that has not been declared.
+
+If `overwrite_all` is true, nothing about the existing licensing is kept, and
+none of it can stop the crosswalk: `additional_licenses` is removed, every
+license file (`LICENSE`, `LICENCE` or `COPYING`, with or without a `.md` or
+`.txt` extension) is removed and `LICENSE` written in their place, even where
+one already held `license` in its own words, and every julia source file is
+marked with `license` whatever it was marked with before. This is the way out
+when the licensing of a repository has become inconsistent, and the way to
+hand over a license file of your own to be maintained by the crosswalk. It
+relabels files regardless of who wrote them, so whether they may be
+relicensed is for you to establish first; what it replaces can be recovered
+from git if it had been committed.
+
+# Failure
+
+The crosswalk throws an error, and nothing is changed, if `license` is not an
+identifier SPDX recognises or a remote metadata query cannot be completed.
+"""
+function relicense!(license::AbstractString,
+                    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`);
+                    overwrite_all::Bool = false)
+    return run_crosswalk(git_dir, category = nothing, keywords = nothing,
+                         license = license, build = false, update = false,
+                         overwrite_all = overwrite_all)
+end
+
+# The crosswalk itself, which `crosswalk` and `relicense!` both run. With
+# `overwrite_all` every license file and source file header is put under
+# `license`, whatever it held, and the additional licenses are dropped
+function run_crosswalk(git_dir::AbstractString; category, keywords,
+                       license::Union{AbstractString, Nothing}, build,
+                       update, overwrite_all::Bool)
     project = read_project(git_dir)
     rsmd = get!(project, "rsmd", OrderedDict{String, Any}())
     proj_version = VersionNumber(project["version"])
 
-    now = string(today())
-    cd(git_dir)
-    init = readchomp(`$(Git.git()) log --max-parents=0 --format=%ad --date=short -n 1`)
-    tags = readlines(`$(Git.git()) tag -l --sort="version:refname"`)
-    tag = isempty(tags) ? proj_version : maximum(VersionNumber.(tags))
-    tag_date = isempty(tags) ? now :
-               readchomp(`$(Git.git()) log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/v$tag`)
-    branch = readchomp(`$(Git.git()) branch --show-current`)
-    remotes = split(readchomp(`$(Git.git()) remote`), '\n')
-    urls = String[]
-    for remote in remotes
-        push!(urls,
-              replace(readchomp(`$(Git.git()) remote get-url $remote`),
-                      r"\.git" => ""))
+    now = utc_today()
+    git = `$(Git.git()) -C $git_dir`
+    init = readchomp(`$git log --max-parents=0 --format=%ad --date=short -n 1`)
+    releases = release_tags(git_dir)
+    latest = isempty(releases) ? nothing :
+             argmax(release -> release.version, releases)
+    tag = isnothing(latest) ? proj_version : latest.version
+    tag_date = isnothing(latest) ? nothing :
+               readchomp(`$git log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/$(latest.name)`)
+    remotes = readlines(`$git remote`)
+    isempty(remotes) &&
+        error("The repository at $git_dir has no git remote. The metadata " *
+              "records where the repository is, so add one with " *
+              "`git remote add origin <address>`")
+    urls = map(remotes) do remote
+        return repository_url(readchomp(`$git remote get-url $remote`))
     end
 
     repos = replace.(urls, r"^.*/([^/]+)$" => s"\1")
 
     file = joinpath(git_dir, "codemeta.json")
-    codemeta = isfile(file) ?
-               JSON.parsefile(file, dicttype = OrderedDict) :
-               OrderedDict{String, Any}()
+    codemeta = isfile(file) ? read_json(file) : OrderedDict{String, Any}()
+
+    # .zenodo.json is rewritten whatever it holds, so one that cannot be read
+    # is no reason to stop, but what it held is lost
+    file = joinpath(git_dir, ".zenodo.json")
+    zenodo = OrderedDict{String, Any}()
+    zenodo_problem = nothing
+    if isfile(file)
+        try
+            zenodo = read_json(file)
+        catch err
+            err isa ErrorException || rethrow()
+            zenodo_problem = first(split(err.msg, '\n'))
+        end
+    end
 
     codemeta["@context"] = "https://w3id.org/codemeta/3.0"
     codemeta["type"] = "SoftwareSourceCode"
@@ -70,15 +191,18 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
                          update = update)) &&
         @warn "No description metadata, add `description` to [rsmd] in Project.toml"
 
-    repo_index = "origin" ∈ remotes ?
-                 repo_index = findfirst(==("origin"), remotes) : 1
+    repo_index = something(findfirst(==("origin"), remotes), 1)
 
     if haskey(codemeta, "codeRepository")
         cm_url = codemeta["codeRepository"]
-        if cm_url ∉ urls
-            @error "codemeta has wrong repo URL – $cm_url not in $urls – using $(remotes[repo_index])"
+        found = findfirst(==(repository_url(cm_url)), urls)
+        if isnothing(found)
+            @error "codemeta has wrong repo URL - $cm_url not in $urls - using $(remotes[repo_index])"
         else
-            repo_index = findfirst(==(cm_url), urls)
+            repo_index = found
+            cm_url == urls[found] ||
+                @info "Writing the repository in codemeta.json as " *
+                      "$(urls[found]), not $cm_url"
         end
     end
     codemeta["codeRepository"] = urls[repo_index]
@@ -86,14 +210,27 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     if haskey(codemeta, "name")
         cm_name = codemeta["name"]
         if cm_name ≠ repos[repo_index]
-            @error "codemeta has wrong repo repo name – $cm_name not $(repos[repo_index]) – fixing"
+            @error "codemeta has wrong repo name - $cm_name not $(repos[repo_index]) - fixing"
         end
     end
     codemeta["name"] = repos[repo_index]
 
     codemeta["issueTracker"] = urls[repo_index] * "/issues"
 
-    readme = urls[repo_index] * "/blob/" * branch * "/README.md"
+    # The README on the default branch: a hosting site reads `HEAD` as that
+    # branch, whatever it is called and whichever branch is checked out. A link
+    # of the same form that names a branch is brought into line, and any other
+    # link is left
+    readme = urls[repo_index] * "/blob/HEAD/README.md"
+    for key in ("readme", "buildInstructions")
+        link = get(codemeta, key, nothing)
+        link isa AbstractString && link ≠ readme &&
+        startswith(link, urls[repo_index] * "/blob/") &&
+        endswith(link, "/README.md") || continue
+        @info "Moving $key in codemeta.json from $link to $readme, which " *
+              "follows the default branch"
+        codemeta[key] = readme
+    end
     cm_readme = get!(codemeta, "readme", readme)
     cm_readme == readme ||
         @info "README set to $cm_readme, not $readme"
@@ -114,10 +251,12 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         codemeta["dateCreated"] = init
     end
 
-    platforms = get_os_from_workflows()
+    platforms = get_os_from_workflows(git_dir)
     cm_platforms = sort(string.(get(codemeta, "operatingSystem", String[])))
-    if length(platforms) ≠ length(cm_platforms) ||
-       any(platforms .≠ cm_platforms)
+    if isempty(platforms)
+        isempty(cm_platforms) &&
+            @info "No platform info in codemeta.json and none in workflows"
+    elseif platforms ≠ cm_platforms
         if isempty(cm_platforms)
             @info "No platform info in codemeta.json, so filling from workflows ($platforms)"
         else
@@ -129,6 +268,22 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     years = string(year(Date(init)))
 
     cm_version = VersionNumber(get!(codemeta, "version", string(proj_version)))
+
+    # A version with no release tag has no date of its own, so the dates given
+    # to it are provisional. They are brought up to today on the default
+    # branch, which releases are made from, and by a deliberate run. On any
+    # other branch the ones already written for this version are kept, so that
+    # they do not change with the day the crosswalk is run
+    unreleased = isnothing(latest) || proj_version > tag
+    keep_dates = unreleased && !update && cm_version == proj_version &&
+                 haskey(codemeta, "dateModified") &&
+                 !on_default_branch(git_dir, remotes[repo_index])
+    keep_dates &&
+        @info "Keeping the dates of this unreleased version, which are " *
+              "brought up to date on the default branch or by " *
+              "`crosswalk(update = true)`"
+    provisional_date = keep_dates ? codemeta["dateModified"] : now
+    isnothing(tag_date) && (tag_date = provisional_date)
 
     if proj_version == tag
         @debug "Still on latest release version: $tag"
@@ -150,12 +305,12 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         end
     elseif proj_version > tag
         @info "Preparing for new release"
-        codemeta["dateModified"] = now
+        codemeta["dateModified"] = provisional_date
         if cm_version ≠ proj_version
             @info "Updating codemeta tag version ($cm_version) to " *
                   "new release ($proj_version)"
             cm_version = proj_version
-            this_year = string(year(Date(now)))
+            this_year = string(year(Date(provisional_date)))
             if this_year ≠ years
                 years = years * "-" * this_year
             end
@@ -182,8 +337,15 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
             codemeta["datePublished"] == first_release_date ||
                 @warn "codemeta.json publication date inconsistent with Julia's General registry, fixing ($(codemeta["datePublished"]) ≠ $first_release_date)"
         end
-        codemeta["datePublished"] = first_release_date
+    elseif !isempty(releases)
+        # Not registered, but released: the earliest release tag has the date
+        first_release = argmin(release -> release.version, releases)
+        first_release_date = readchomp(`$git log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/$(first_release.name)`)
+    else
+        first_release_date = keep_dates ?
+                             get(codemeta, "datePublished", now) : now
     end
+    codemeta["datePublished"] = first_release_date
     project["version"] = string(proj_version)
     codemeta["version"] = "v$cm_version"
 
@@ -196,13 +358,9 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         if !isempty(get(codemeta, "author", []))
             details = author_details_from_codemeta(codemeta["author"])
             source = "codemeta.json"
-        elseif isfile(joinpath(git_dir, ".zenodo.json"))
-            zenodo = JSON.parsefile(joinpath(git_dir, ".zenodo.json"),
-                                    dicttype = OrderedDict)
-            if !isempty(get(zenodo, "creators", []))
-                details = author_details_from_zenodo(zenodo["creators"])
-                source = ".zenodo.json"
-            end
+        elseif !isempty(get(zenodo, "creators", []))
+            details = author_details_from_zenodo(zenodo["creators"])
+            source = ".zenodo.json"
         end
         if !isnothing(details)
             if author_details_consistent(details, project["authors"])
@@ -254,14 +412,17 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
             end
         end
     else
-        authors = project["authors"]
-        for author in authors
+        for author in project["authors"]
             name, email = parse_author(author)
             detail = OrderedDict{String, Any}("name" => name)
             isnothing(email) || (detail["email"] = email)
             push!(author_data, detail)
+            push!(authors, isnothing(email) ? name : name * " <" * email * ">")
         end
         rsmd["author_details"] = author_data
+        @info "Created author_details in the [rsmd] table of Project.toml " *
+              "from authors, please add each author's ORCID and ROR " *
+              "affiliation there if you can"
     end
 
     # Add authors listed in `authors` but missing from author_details
@@ -311,71 +472,77 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         project["authors"] = authors
     end
 
-    haslicense = false
-    license = nothing
-
-    if haskey(project, "license")
-        proj_license = project["license"]
-        cm_license = "https://spdx.org/licenses/" * proj_license
-        if haskey(codemeta, "license")
-            if codemeta["license"] == cm_license
-                haslicense = true
-                license = proj_license
-            elseif update
-                @info "Updating license in codemeta.json to match Project.toml " *
-                      "($(codemeta["license"]) → $cm_license)"
-                codemeta["license"] = cm_license
-                haslicense = true
-                license = proj_license
-            else
-                @error "License mismatch between Project.toml and codemeta.json: " *
-                       "$(codemeta["license"]) ≠ $cm_license"
-            end
-        else
-            codemeta["license"] = cm_license
-            haslicense = true
-            license = proj_license
-        end
+    # The license every file is written from. Passing `license` or `update`
+    # makes a change of license deliberate; any other disagreement stops the
+    # crosswalk here, before anything is written
+    recorded = get(codemeta, "license", nothing)
+    recorded isa AbstractString && (recorded = spdx_identifier(recorded))
+    if !isnothing(license)
+        license_id = license
+    elseif haskey(project, "license")
+        license_id = project["license"]
+        isnothing(recorded) || recorded == license_id || update ||
+            error("License mismatch between Project.toml and codemeta.json: " *
+                  "$license_id ≠ $recorded. Nothing has been changed. If " *
+                  "$license_id is the license you want, run " *
+                  "`crosswalk(update = true)`; if not, restore " *
+                  "`license = \"$recorded\"` in Project.toml")
+    elseif recorded isa AbstractString
+        license_id = recorded
     else
-        if haskey(codemeta, "license")
-            project["license"] = replace(codemeta["license"],
-                                         "https://spdx.org/licenses/" => "")
-            haslicense = true
-            license = project["license"]
-        else
-            @warn "No license metadata"
-        end
+        error("No license found in Project.toml or codemeta.json. " *
+              describe_license_files(git_dir) * "Set one " *
+              "with `crosswalk(license = \"LGPL-3.0-or-later\")`, or add " *
+              "`license = \"LGPL-3.0-or-later\"` to Project.toml, using " *
+              LICENSE_ADVICE)
+    end
+    # The licenses the package is being moved from, if this run changes it
+    previous_licenses = String[]
+    for (place, held) in ("codemeta.json" => recorded,
+                          "Project.toml" => get(project, "license", nothing))
+        held isa AbstractString && held ≠ license_id || continue
+        @info "Changing license in $place from $held to $license_id"
+        push!(previous_licenses, held)
+    end
+    project["license"] = license_id
+    codemeta["license"] = "https://spdx.org/licenses/" * license_id
+
+    spdx = get_license_from_spdx(license_id)
+    isnothing(spdx) &&
+        error("`$license_id` is not a recognised SPDX license identifier. " *
+              "Use " * LICENSE_ADVICE)
+    open_license = spdx["isOsiApproved"]
+
+    # Licenses the package declares that some of its files are under instead
+    overwrite_all && delete!(rsmd, "additional_licenses")
+    additional_licenses = String.(vcat(get(rsmd, "additional_licenses",
+                                           String[])))
+    for additional in additional_licenses
+        isnothing(get_license_from_spdx(additional)) &&
+            error("`$additional` in additional_licenses is not a " *
+                  "recognised SPDX license identifier. Use an identifier " *
+                  "from https://spdx.org/licenses/")
     end
 
-    open_license = nothing
-    license_content = nothing
-    if haslicense
-        url = "https://spdx.org/licenses/$license.json"
-        headers = ["Accept" => "application/json"]
-        response = HTTP.get(url, headers, status_exception = false)
+    just_names = first.(parse_author.(project["authors"]))
+    license_content = license_text(spdx["licenseText"], years, just_names)
 
-        response.status == 200 ||
-            error("Unable to fetch license text for $license from " *
-                  "spdx.org, HTTP status $(response.status)")
-
-        just_names = replace.(project["authors"], r" *<[^>]+> *" => "")
-        name_list = join(just_names, ", ", " and ")
-        json = JSON.parse(String(response.body))
-        open_license = json["isOsiApproved"]
-        content = json["licenseText"]
-        replaces = [r"<year>"i => years,
-            r"<owners?>"i => name_list,
-            r"<copyright holders?>"i => name_list,
-            r"<Owner Organization Name>"i => name_list,
-            r"<Asset Owner>"i => name_list,
-            r"<HOLDERS?>"i => name_list,
-            r"<name of author>"i => name_list,
-            r"<author's name or designee>"i => name_list]
-        for r in replaces
-            content = replace(content, r)
-        end
-        license_content = content
+    # A license file left by an earlier run names the authors there were then,
+    # which are the ones still in codemeta.json
+    earlier_names = String[]
+    for author in get(codemeta, "author", [])
+        author isa AbstractDict || continue
+        given = get(author, "givenName", nothing)
+        family = get(author, "familyName", get(author, "name", nothing))
+        isnothing(family) ||
+            push!(earlier_names, isnothing(given) ? family : "$given $family")
     end
+    generated = [license_content,
+        license_text(spdx["licenseText"], years, earlier_names)]
+    license_changes = license_file_changes(git_dir, license_id, generated,
+                                           replace = update ||
+                                                     !isnothing(license),
+                                           overwrite = overwrite_all)
 
     cm_authors = get(codemeta, "author", OrderedDict{String, Any}[])
     proj_authors = rsmd["author_details"]
@@ -477,20 +644,18 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     else
         if haskey(codemeta, "codemeta:contIntegration")
             codemeta["continuousIntegration"] = codemeta["codemeta:contIntegration"]["id"]
-        elseif isfile(".github/workflows/testing.yaml")
-            @info "Using .github/workflows/testing.yaml for CI"
-            codemeta["continuousIntegration"] = urls[repo_index] *
-                                                "/actions/workflows/testing.yaml"
-            codemeta["codemeta:contIntegration"] = Dict("id" =>
-                                                            codemeta["continuousIntegration"])
-        elseif isfile(".github/workflows/CI.yaml")
-            @info "Using .github/workflows/CI.yaml for CI"
-            codemeta["continuousIntegration"] = urls[repo_index] *
-                                                "/actions/workflows/CI.yaml"
-            codemeta["codemeta:contIntegration"] = Dict("id" =>
-                                                            codemeta["continuousIntegration"])
-        elseif isdir(".github/workflows")
-            @warn "CI not found in codemeta.json, but .github/workflows exists"
+        else
+            ci_workflow = get_ci_workflow(git_dir)
+            if !isnothing(ci_workflow)
+                @info "Using .github/workflows/$ci_workflow for CI"
+                codemeta["continuousIntegration"] = urls[repo_index] *
+                                                    "/actions/workflows/" *
+                                                    ci_workflow
+                codemeta["codemeta:contIntegration"] = Dict("id" =>
+                                                                codemeta["continuousIntegration"])
+            elseif isdir(joinpath(git_dir, ".github", "workflows"))
+                @warn "CI not found in codemeta.json, but .github/workflows exists"
+            end
         end
     end
 
@@ -548,10 +713,8 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         end
         push!(crosswalk_d["creators"], dict)
     end
-    if !isnothing(open_license)
-        crosswalk_d["access_right"] = open_license ? "open" : "closed"
-    end
-    crosswalk_d["license"] = project["license"]
+    crosswalk_d["access_right"] = open_license ? "open" : "closed"
+    crosswalk_d["license"] = license_id
     dict = OrderedDict{String, String}()
     dict["scheme"] = "url"
     dict["identifier"] = codemeta["codeRepository"]
@@ -571,13 +734,26 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     # Round-trip to ensure correct order if there were elements missing
     project = order_project(TOML.parse(sprint(TOML.print, project)))
 
+    new_headers = header_changes(git_dir, license_id,
+                                 additional = additional_licenses,
+                                 previous = previous_licenses,
+                                 overwrite = overwrite_all)
+
     # All remote queries have succeeded, so the files can now be written
-    if !isnothing(license_content)
+    # Removed before LICENSE is written: on a file system that ignores case, a
+    # file called License is the same file as LICENSE
+    for file in license_changes.remove
+        rm(file)
+        @info license_changes.write ?
+              "Replaced $(basename(file)) with LICENSE" :
+              "Removed $(basename(file)), which did not hold the " *
+              "$license_id license"
+    end
+    if license_changes.write
         file = joinpath(git_dir, "LICENSE")
         open(file, "w") do io
             return write(io, license_content)
         end
-        rm(joinpath(git_dir, "LICENSE.md"), force = true)
     end
 
     file = joinpath(git_dir, "Project.toml")
@@ -594,29 +770,12 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     open(file, "w") do io
         return JSON.print(io, crosswalk_d, 4)
     end
+    isnothing(zenodo_problem) ||
+        @warn "$zenodo_problem. It has been overwritten, and any " *
+              "information in it has been lost"
 
-    # Recursively walk through the directory
-    path = joinpath(git_dir, ".git")
-    notpath = joinpath(git_dir, ".github")
-    for (root, _, files) in walkdir(git_dir)
-        if !startswith(root, path) || startswith(root, notpath)
-            for file in files
-                if endswith(file, ".jl")
-                    jl_file = joinpath(root, file)
-                    data = readlines(jl_file)
-                    if startswith(data[1], "# SPDX-License-Identifier:")
-                        data[1] = "# SPDX-License-Identifier: $(project["license"])"
-                    elseif !startswith(data[1], "### A Pluto.jl notebook ###")
-                        pushfirst!(data, "")
-                        pushfirst!(data,
-                                   "# SPDX-License-Identifier: $(project["license"])")
-                    end
-                    open(jl_file, "w") do io
-                        return println.(Ref(io), data)
-                    end
-                end
-            end
-        end
+    for (jl_file, content) in new_headers
+        write(jl_file, content)
     end
 
     return nothing

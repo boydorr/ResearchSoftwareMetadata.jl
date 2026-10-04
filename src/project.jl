@@ -22,13 +22,13 @@ end
     ResearchSoftwareMetadata.order_project(project_d::AbstractDict)
 
 Take a parsed `Project.toml` dictionary and return it as an OrderedDict
-in canonical order — the order Pkg itself writes, applied recursively to
-nested tables — so that files written from it are not reordered when Pkg
-next edits them.
+in canonical order, which is the order Pkg itself writes, applied
+recursively to nested tables, so that files written from it are not
+reordered when Pkg next edits them.
 """
 function order_project(project_d::AbstractDict)
     project = OrderedDict{String, Any}()
-    for key in sort!(collect(keys(project_d)); by = project_key_order)
+    for key in sort!(collect(keys(project_d)), by = project_key_order)
         project[key] = order_value(project_d[key])
     end
 

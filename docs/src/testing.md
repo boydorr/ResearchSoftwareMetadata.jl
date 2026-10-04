@@ -6,7 +6,9 @@ verify that its metadata and formatting stay clean: that running
 are committed (so the metadata is consistent and up to date), and that running
 [JuliaFormatter](https://github.com/domluna/JuliaFormatter.jl) leaves the source code
 unchanged (so the code is well formatted). If either check would change a file, the test
-fails until you re-run the crosswalk or formatter and commit the result.
+fails until you re-run the crosswalk or formatter and commit the result. The crosswalk
+check also fails if the crosswalk logs a warning, so the package's metadata has to be
+complete, with a description, a category and build instructions, as well as consistent.
 
 This is how ResearchSoftwareMetadata tests itself, and the test files are written so that
 they can be copied into any other package.
@@ -19,8 +21,7 @@ into your own package's `test/` directory:
 
 - [`GitUtils.jl`](https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/main/test/GitUtils.jl)
   — provides `is_repo_clean`, which the other two files use to check whether the checks
-  changed anything. It needs no adaptation (though you may want to change the SPDX header
-  to your own package's licence identifier).
+  changed anything.
 - [`clean_ResearchSoftwareMetadata.jl`](https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/main/test/clean_ResearchSoftwareMetadata.jl)
   — checks the metadata crosswalk is clean.
 - [`clean_JuliaFormatter.jl`](https://github.com/boydorr/ResearchSoftwareMetadata.jl/blob/main/test/clean_JuliaFormatter.jl)
@@ -29,10 +30,18 @@ into your own package's `test/` directory:
 You can use either or both of the `clean_*.jl` files; the test-suite code below discovers
 whichever ones are present.
 
-In each `clean_*.jl` file, replace `ResearchSoftwareMetadata` in the `using` line with
-your own package where it stands for the package under test, and set the SPDX header to
-your package's licence (otherwise the crosswalk will rewrite it and the check will fail).
-For a package called `MyPackage` with an MIT licence, the two files look like this:
+None of the three files needs adapting apart from its first line. Each starts with
+`# SPDX-License-Identifier: MIT`, which is this package's licence, and the crosswalk stops
+with an error if it finds a file marked with a licence that your package has not declared.
+So either change that line in each file to your own package's licence, or keep the files
+under the MIT licence and say so in your `Project.toml`:
+
+```toml
+[rsmd]
+additional_licenses = ["MIT"]
+```
+
+The two `clean_*.jl` files are:
 
 ```julia
 # SPDX-License-Identifier: MIT
@@ -41,7 +50,6 @@ module CleanRSMD
 using Test
 using Git
 using Logging
-using MyPackage
 using ResearchSoftwareMetadata
 
 include("GitUtils.jl")
@@ -55,7 +63,7 @@ if !haskey(ENV, "RUNNER_OS") || ENV["RUNNER_OS"] ≠ "Windows"
         global_logger(SimpleLogger(stderr, Logging.Warn))
         @test_nowarn ResearchSoftwareMetadata.crosswalk()
         global_logger(SimpleLogger(stderr, Logging.Info))
-        @test is_repo_clean(git_dir; strict = haskey(ENV, "RUNNER_OS"))
+        @test is_repo_clean(git_dir, strict = haskey(ENV, "RUNNER_OS"))
     end
 else
     @test_broken !haskey(ENV, "RUNNER_OS") || ENV["RUNNER_OS"] ≠ "Windows"
@@ -71,7 +79,6 @@ module CleanJuliaFormatter
 using Test
 using Git
 using JuliaFormatter
-using MyPackage
 
 include("GitUtils.jl")
 using .GitUtils
@@ -80,8 +87,8 @@ using .GitUtils
 if !haskey(ENV, "RUNNER_OS") || ENV["RUNNER_OS"] ≠ "Windows"
     @testset "JuliaFormatter" begin
         git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
-        @test_nowarn format(MyPackage)
-        @test is_repo_clean(git_dir; strict = haskey(ENV, "RUNNER_OS"))
+        @test_nowarn format(git_dir)
+        @test is_repo_clean(git_dir, strict = haskey(ENV, "RUNNER_OS"))
     end
 else
     @test_broken !haskey(ENV, "RUNNER_OS") || ENV["RUNNER_OS"] ≠ "Windows"
@@ -148,11 +155,19 @@ package's, that looks like:
 
 Some things to be aware of:
 
-- The crosswalk queries orcid.org, ror.org, spdx.org and the Julia General registry, so
-  the runner needs network access, and it interrogates the git history and tags, so the
-  repository must be checked out in full (`fetch-depth: 0` on `actions/checkout`).
+- The crosswalk queries orcid.org, ror.org, spdx.org, doi.org and the Julia General
+  registry, and for a version that has not been released it asks your git remote which
+  branch is its default, so the runner needs network access. It also interrogates the git
+  history and tags, so the repository must be checked out in full (`fetch-depth: 0` on
+  `actions/checkout`).
 - Windows runners are skipped by both checks (marked as broken) due to file writing
   issues.
+- Until a version has a release tag, its dates in `codemeta.json` are provisional. On
+  your default branch every crosswalk sets them to today's date (in UTC), so there the
+  check fails on any later day until the crosswalk is run again; that is what keeps the
+  dates right in the code you release. On any other branch, and so in a pull request, the
+  dates are left as they are, and `ResearchSoftwareMetadata.crosswalk(update = true)` or
+  one of the `increase_` functions brings them up to date.
 - On CI the repository must be *strictly* clean — no staged, unstaged or untracked
   changes after the checks run. Locally the criterion is relaxed: only unstaged changes
   fail the tests, so work you have already staged doesn't stop you running the suite.

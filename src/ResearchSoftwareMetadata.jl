@@ -15,7 +15,9 @@ which enforces consistency across the metadata files and the julia source
 code, and [`ResearchSoftwareMetadata.increase_patch()`](@ref),
 [`ResearchSoftwareMetadata.increase_minor()`](@ref) and
 [`ResearchSoftwareMetadata.increase_major()`](@ref), which bump the package
-version and then re-run the crosswalk.
+version and then re-run the crosswalk, and
+[`ResearchSoftwareMetadata.relicense!()`](@ref), which moves the package to
+a new license.
 """
 module ResearchSoftwareMetadata
 
@@ -25,11 +27,18 @@ using TOML
 using JSON
 using DataStructures
 using HTTP
+using LicenseCheck
 using YAML
+using Compat: @compat
+
+# The supported entry points, which are called by their qualified names
+@compat public crosswalk, relicense!, increase_patch, increase_minor,
+               increase_major
 
 include("project.jl")
 include("remotequeries.jl")
 include("utils.jl")
+include("licensing.jl")
 include("crosswalk.jl")
 include("versioning.jl")
 

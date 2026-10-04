@@ -2,7 +2,7 @@
 
 using Pkg
 
-# Update Phylo folder packages 
+# Update the package's own dependencies
 Pkg.activate(".")
 Pkg.update()
 
@@ -21,9 +21,6 @@ end
 # Update docs folder packages
 Pkg.activate("docs")
 Pkg.update()
-"ResearchSoftwareMetadata" ∈ [p.name for p in values(Pkg.dependencies())] &&
-    Pkg.rm("ResearchSoftwareMetadata")
-Pkg.develop(path = ".")
 
 # Reformat files in package
 using JuliaFormatter
