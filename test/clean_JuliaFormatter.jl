@@ -13,7 +13,7 @@ if !haskey(ENV, "RUNNER_OS") || ENV["RUNNER_OS"] ≠ "Windows"
     @testset "JuliaFormatter" begin
         git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         @test_nowarn format(git_dir)
-        @test is_repo_clean(git_dir; strict = haskey(ENV, "RUNNER_OS"))
+        @test is_repo_clean(git_dir, strict = haskey(ENV, "RUNNER_OS"))
     end
 else
     @test_broken !haskey(ENV, "RUNNER_OS") || ENV["RUNNER_OS"] ≠ "Windows"

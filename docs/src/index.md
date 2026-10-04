@@ -77,7 +77,7 @@ Then, from the root of your package, you can just run a crosswalk:
 using Pkg
 
 # Create a new project with ResearchSoftwareMetadata in it
-Pkg.activate(; temp = true)
+Pkg.activate(temp = true)
 Pkg.add("ResearchSoftwareMetadata")
 
 # Carry out a crosswalk between the different metadata formats

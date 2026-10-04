@@ -95,7 +95,7 @@ Reconcile a metadata field between `Project.toml` (authoritative) and
 `codemeta.json`. An explicit `value` (e.g. from a keyword argument to
 `crosswalk`) takes precedence and is written into both; otherwise the
 `Project.toml` entry is used, fixing `codemeta.json` with a warning if it
-disagrees — or an informational message when `update` is true, meaning
+disagrees, or with an informational message when `update` is true, meaning
 the `Project.toml` change is deliberate and should just propagate. If the
 field is missing from `Project.toml` but present in `codemeta.json`, it
 is backfilled into `Project.toml`. If it is absent from both, `default`

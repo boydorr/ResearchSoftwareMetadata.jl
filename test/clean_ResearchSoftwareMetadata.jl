@@ -17,7 +17,7 @@ if !haskey(ENV, "RUNNER_OS") || ENV["RUNNER_OS"] ≠ "Windows"
         global_logger(SimpleLogger(stderr, Logging.Warn))
         @test_nowarn ResearchSoftwareMetadata.crosswalk()
         global_logger(SimpleLogger(stderr, Logging.Info))
-        @test is_repo_clean(git_dir; strict = haskey(ENV, "RUNNER_OS"))
+        @test is_repo_clean(git_dir, strict = haskey(ENV, "RUNNER_OS"))
     end
 else
     @test_broken !haskey(ENV, "RUNNER_OS") || ENV["RUNNER_OS"] ≠ "Windows"

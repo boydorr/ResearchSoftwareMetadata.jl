@@ -41,6 +41,26 @@ end
     end
 end
 
+@testset "Checks for other packages to copy" begin
+    # The two files are printed in the documentation as they are. This compares
+    # the listings only, not the instructions around them
+    page = read(joinpath(@__DIR__, "..", "docs", "src", "testing.md"), String)
+    for name in ("clean_ResearchSoftwareMetadata.jl", "clean_JuliaFormatter.jl")
+        file = read(joinpath(@__DIR__, name), String)
+        @test occursin("```julia\n" * file * "```", page)
+    end
+
+    # The state of a repository can be read whatever its files are called, and
+    # from any working directory
+    mktempdir() do dir
+        run(`$(Git.git()) -C $dir init -q -b main`)
+        @test is_repo_clean(dir)
+        write(joinpath(dir, "data for δ.csv"), "a,b\n")
+        @test is_repo_clean(dir)
+        @test !is_repo_clean(dir, strict = true)
+    end
+end
+
 @testset "Failed metadata lookups" begin
     @test isnothing(ResearchSoftwareMetadata.get_person_from_orcid("0000-0000-0000-0000"))
     @test isnothing(ResearchSoftwareMetadata.get_organisation_from_ror("invalid"))
