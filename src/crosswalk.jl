@@ -114,10 +114,12 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         codemeta["dateCreated"] = init
     end
 
-    platforms = get_os_from_workflows()
+    platforms = get_os_from_workflows(git_dir)
     cm_platforms = sort(string.(get(codemeta, "operatingSystem", String[])))
-    if length(platforms) ≠ length(cm_platforms) ||
-       any(platforms .≠ cm_platforms)
+    if isempty(platforms)
+        isempty(cm_platforms) &&
+            @info "No platform info in codemeta.json and none in workflows"
+    elseif platforms ≠ cm_platforms
         if isempty(cm_platforms)
             @info "No platform info in codemeta.json, so filling from workflows ($platforms)"
         else

@@ -35,7 +35,156 @@ end
     @test ResearchSoftwareMetadata.split_name("Plato") == (nothing, "Plato")
 end
 
-function make_fixture(dir; license = "MIT", extra = "", author_details = true)
+# Write the named workflow files into a throwaway repository directory and
+# return the operating systems read from them
+function workflow_os(workflows::Pair{String, String}...)
+    return mktempdir() do dir
+        folder = joinpath(dir, ".github", "workflows")
+        mkpath(folder)
+        for (name, content) in workflows
+            write(joinpath(folder, name), content)
+        end
+        return ResearchSoftwareMetadata.get_os_from_workflows(dir)
+    end
+end
+
+# The operating systems read from a workflow of one job, `test`, whose entries
+# are given in YAML flow style
+function job_os(entries::String)
+    return workflow_os("a.yaml" => "on: push\njobs: {test: {$entries}}\n")
+end
+
+@testset "Operating systems from workflows" begin
+    runner_os = ResearchSoftwareMetadata.runner_os
+    unknown = (:info, r"Cannot determine the operating system for job test")
+
+    @testset "Runner labels" begin
+        @test runner_os.(["ubuntu-22.04", "ubuntu-24.04-arm", "linux"]) ==
+              fill("Linux", 3)
+        @test runner_os.(["windows-2022", "Windows"]) == fill("Windows", 2)
+        @test runner_os.(["macos-latest", "macOS-latest", "macos-14"]) ==
+              fill("macOS", 3)
+        @test all(isnothing, runner_os.(["self-hosted", "x64", "ARM64"]))
+    end
+
+    @testset "runs-on" begin
+        @test job_os("runs-on: ubuntu-latest") == ["Linux"]
+        @test workflow_os("a.yaml" => """
+                          on: push
+                          jobs:
+                            a: {runs-on: ubuntu-22.04}
+                            b: {runs-on: windows-2022}
+                            c: {runs-on: macos-14}
+                            d: {runs-on: macOS-latest}
+                          """) == ["Linux", "Windows", "macOS"]
+        # A list of labels describes one runner
+        @test job_os("runs-on: [self-hosted, linux, x64]") == ["Linux"]
+        # Only the labels of a runner group can name an operating system
+        @test job_os("runs-on: {group: big, labels: [windows-latest]}") ==
+              ["Windows"]
+        @test_logs unknown @test isempty(job_os("runs-on: {group: big}"))
+        @test_logs unknown @test isempty(job_os("runs-on: self-hosted"))
+    end
+
+    @testset "Matrix" begin
+        on_matrix = "runs-on: '\${{ matrix.os }}', strategy: "
+        @test job_os(on_matrix *
+                     "{matrix: {os: [ubuntu-latest, windows-latest]}}") ==
+              ["Linux", "Windows"]
+        @test job_os(on_matrix * "{matrix: {os: macos-latest}}") == ["macOS"]
+        @test job_os("runs-on: '\${{matrix.os}}', strategy: " *
+                     "{matrix: {os: [macos-latest]}}") == ["macOS"]
+        @test job_os(on_matrix * "{matrix: {include: " *
+                     "[{os: ubuntu-latest}, {os: windows-latest}]}}") ==
+              ["Linux", "Windows"]
+        @test job_os(on_matrix * "{matrix: {os: [ubuntu-latest], include: " *
+                     "[{os: macos-latest, julia: 1.11}]}}") ==
+              ["Linux", "macOS"]
+        # A reference to an axis the matrix does not have
+        @test_logs unknown @test isempty(job_os(on_matrix *
+                                                "{matrix: {julia: [1]}}"))
+        # Expressions beyond a single reference are not evaluated
+        fallback = "runs-on: \"\${{ matrix.os || 'ubuntu-latest' }}\", " *
+                   "strategy: {matrix: {os: [ubuntu-latest]}}"
+        @test_logs unknown @test isempty(job_os(fallback))
+    end
+
+    @testset "Reusable workflows" begin
+        called = """
+                 on:
+                   workflow_call:
+                     inputs:
+                       os:
+                         required: true
+                         type: string
+                 jobs:
+                   tests:
+                     runs-on: \${{ inputs.os }}
+                     steps:
+                       - run: echo tests
+                 """
+        with_matrix = """
+                      on: push
+                      jobs:
+                        test:
+                          strategy:
+                            matrix:
+                              julia-version: ['1.11', '1']
+                              os: [ubuntu-latest, macOS-latest, windows-latest]
+                          uses: ./.github/workflows/called.yaml
+                          with:
+                            julia-version: \${{ matrix.julia-version }}
+                            os: \${{ matrix.os }}
+                      """
+        with_literal = """
+                       on: push
+                       jobs:
+                         test:
+                           uses: ./.github/workflows/called.yaml
+                           with:
+                             os: ubuntu-latest
+                       """
+        with_default = """
+                       on:
+                         workflow_call:
+                           inputs:
+                             os: {type: string, default: macos-latest}
+                       jobs: {tests: {runs-on: '\${{ inputs.os }}'}}
+                       """
+        # The called workflow is counted through its callers, without a report
+        @test_logs @test workflow_os("called.yaml" => called,
+                                     "matrix.yaml" => with_matrix) ==
+                         ["Linux", "Windows", "macOS"]
+        @test workflow_os("called.yaml" => called,
+                          "literal.yaml" => with_literal) == ["Linux"]
+        @test_logs @test isempty(workflow_os("called.yaml" => called))
+        # An input's default applies when the workflow is not passed one
+        @test workflow_os("called.yaml" => with_default) == ["macOS"]
+        # Neither a workflow in another repository nor a missing one can be read
+        remote = "uses: org/repo/.github/workflows/x.yaml@main"
+        @test_logs unknown @test isempty(job_os(remote))
+        @test_logs unknown @test isempty(workflow_os("matrix.yaml" =>
+                                                         with_matrix))
+        # A workflow that calls itself is not followed for ever
+        @test_logs unknown @test isempty(job_os("uses: ./.github/workflows/a.yaml"))
+    end
+
+    @testset "Workflow files" begin
+        linux = "on: push\njobs: {test: {runs-on: ubuntu-latest}}\n"
+        @test workflow_os("a.yml" => linux) == ["Linux"]
+        # Only YAML files are workflows, and an empty one has no jobs
+        @test workflow_os("a.yaml" => linux,
+                          "README.md" => "# Workflows: [unclosed\n",
+                          "empty.yaml" => "") == ["Linux"]
+        @test isempty(workflow_os())
+        mktempdir() do dir
+            @test isempty(ResearchSoftwareMetadata.get_os_from_workflows(dir))
+        end
+    end
+end
+
+function make_fixture(dir; license = "MIT", extra = "", author_details = true,
+                      workflows = true)
     project_content = """
                       name = "RSMDFixture"
                       uuid = "d9a1c9c6-91f3-4f9a-8b4a-9b4c8d3a1e2f"
@@ -65,18 +214,20 @@ function make_fixture(dir; license = "MIT", extra = "", author_details = true)
     open(joinpath(dir, "src", "RSMDFixture.jl"), "w") do io
         return write(io, src_content)
     end
-    mkpath(joinpath(dir, ".github", "workflows"))
-    open(joinpath(dir, ".github", "workflows", "testing.yaml"), "w") do io
-        return write(io,
-                     """
-                     name: CI
-                     on: push
-                     jobs:
-                       test:
-                         runs-on: ubuntu-latest
-                         steps:
-                           - uses: actions/checkout@v4
-                     """)
+    if workflows
+        mkpath(joinpath(dir, ".github", "workflows"))
+        open(joinpath(dir, ".github", "workflows", "testing.yaml"), "w") do io
+            return write(io,
+                         """
+                         name: CI
+                         on: push
+                         jobs:
+                           test:
+                             runs-on: ubuntu-latest
+                             steps:
+                               - uses: actions/checkout@v4
+                         """)
+        end
     end
     run(`$(Git.git()) -C $dir init -q -b main`)
     run(`$(Git.git()) -C $dir remote add origin
@@ -330,6 +481,33 @@ end
         cd(git_dir)
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test codemeta["license"] == "https://spdx.org/licenses/MIT"
+    end
+end
+
+@testset "Crosswalk without workflows" begin
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    mktempdir() do dir
+        make_fixture(dir, workflows = false)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        cd(git_dir) # crosswalk leaves the working directory changed
+        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+        @test !haskey(codemeta, "operatingSystem")
+    end
+    # Operating systems already in codemeta.json are kept
+    mktempdir() do dir
+        make_fixture(dir, workflows = false)
+        open(joinpath(dir, "codemeta.json"), "w") do io
+            return write(io,
+                         """
+                         {
+                             "operatingSystem": ["Linux", "macOS"]
+                         }
+                         """)
+        end
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        cd(git_dir) # crosswalk leaves the working directory changed
+        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+        @test codemeta["operatingSystem"] == ["Linux", "macOS"]
     end
 end
 
