@@ -15,7 +15,9 @@ which enforces consistency across the metadata files and the julia source
 code, and [`ResearchSoftwareMetadata.increase_patch()`](@ref),
 [`ResearchSoftwareMetadata.increase_minor()`](@ref) and
 [`ResearchSoftwareMetadata.increase_major()`](@ref), which bump the package
-version and then re-run the crosswalk.
+version and then re-run the crosswalk, and
+[`ResearchSoftwareMetadata.relicense!()`](@ref), which moves the package to
+a new license.
 """
 module ResearchSoftwareMetadata
 

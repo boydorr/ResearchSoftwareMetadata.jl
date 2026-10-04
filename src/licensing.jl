@@ -121,7 +121,8 @@ end
     ResearchSoftwareMetadata.license_file_changes(git_dir::AbstractString,
                                                   license::AbstractString,
                                                   generated::AbstractVector;
-                                                  replace::Bool)
+                                                  replace::Bool,
+                                                  overwrite::Bool = false)
 
 Decide what a crosswalk does to the license files of the repository at
 `git_dir`, whose license is the SPDX identifier `license`, and return it
@@ -134,10 +135,16 @@ have written in `generated`) is written afresh. Any other file that
 contains `license` belongs to the user and is left as it is, in which case
 no `LICENSE` is written beside it. A file that does not contain `license`
 is removed if `replace` is set, and is otherwise an error, since replacing
-it would change the licensing of the repository.
+it would change the licensing of the repository. If `overwrite` is set
+none of that applies: every license file is removed and `LICENSE` written.
 """
 function license_file_changes(git_dir::AbstractString, license::AbstractString,
-                              generated::AbstractVector; replace::Bool)
+                              generated::AbstractVector; replace::Bool,
+                              overwrite::Bool = false)
+    target = joinpath(git_dir, "LICENSE")
+    overwrite &&
+        return (write = true,
+                remove = filter(!=(target), license_files(git_dir)))
     own = String[]
     kept = String[]
     foreign = String[]
@@ -159,11 +166,12 @@ function license_file_changes(git_dir::AbstractString, license::AbstractString,
               "is declared: it holds $holds. Nothing has been changed. To " *
               "replace it with the $license license run " *
               "`crosswalk(update = true)`; if it is right, correct the " *
-              "`license` in Project.toml")
+              "`license` in Project.toml. " *
+              "`relicense!(\"$license\", overwrite_all = true)` replaces " *
+              "every license file and header")
     end
     @debug "License files" generated_here=basename.(own) left_alone=basename.(kept) replaced=basename.(foreign)
     write = !isempty(own) || isempty(kept)
-    target = joinpath(git_dir, "LICENSE")
     remove = filter(!=(target), write ? vcat(own, foreign) : foreign)
 
     return (write = write, remove = remove)
@@ -251,7 +259,8 @@ end
     ResearchSoftwareMetadata.header_changes(git_dir::AbstractString,
                                             license::AbstractString;
                                             additional::AbstractVector = String[],
-                                            previous::AbstractVector = String[])
+                                            previous::AbstractVector = String[],
+                                            overwrite::Bool = false)
 
 Return the julia source files of the repository at `git_dir` whose first
 line has to change for the package to be licensed under `license`, as
@@ -263,12 +272,14 @@ is if every license it names is `license` or one of the `additional`
 licenses the package declares. A header naming one of the `previous`
 licenses, which the package is being moved from, is changed to `license`.
 A header naming any other license is an error, listing every such file,
-since changing it would change the licensing of the file. Pluto notebooks,
-whose first line Pluto needs, are passed over.
+since changing it would change the licensing of the file. If `overwrite`
+is set, every header is changed to `license` whatever it names. Pluto
+notebooks, whose first line Pluto needs, are passed over.
 """
 function header_changes(git_dir::AbstractString, license::AbstractString;
                         additional::AbstractVector = String[],
-                        previous::AbstractVector = String[])
+                        previous::AbstractVector = String[],
+                        overwrite::Bool = false)
     prefix = "# SPDX-License-Identifier:"
     header = "$prefix $license"
     allowed = vcat(license, additional)
@@ -281,7 +292,10 @@ function header_changes(git_dir::AbstractString, license::AbstractString;
         elseif startswith(first(lines), prefix)
             named = strip(chopprefix(first(lines), prefix))
             licenses = header_licenses(named)
-            if !isempty(licenses) && all(in(allowed), licenses)
+            if overwrite
+                first(lines) == header && continue
+                lines[1] = header
+            elseif !isempty(licenses) && all(in(allowed), licenses)
                 continue
             elseif isempty(licenses) || named in previous
                 lines[1] = header
@@ -302,7 +316,9 @@ function header_changes(git_dir::AbstractString, license::AbstractString;
               join(undeclared, "\n") * "\nNothing has been changed. If a " *
               "file is meant to have that license, add the license to " *
               "`additional_licenses` in the [rsmd] table of Project.toml; " *
-              "if not, correct the first line of the file")
+              "if not, correct the first line of the file. " *
+              "`relicense!(\"$license\", overwrite_all = true)` puts " *
+              "every file under $license")
 
     return changes
 end

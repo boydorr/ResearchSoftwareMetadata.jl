@@ -42,6 +42,55 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
                    category = nothing, keywords = nothing,
                    license::Union{AbstractString, Nothing} = nothing,
                    build = false, update = false)
+    return run_crosswalk(git_dir, category = category, keywords = keywords,
+                         license = license, build = build, update = update,
+                         overwrite_all = false)
+end
+
+"""
+    relicense!(license, git_dir; overwrite_all = false)
+
+Relicense the package in the repository at `git_dir` under `license`, an
+[SPDX identifier](https://spdx.org/licenses/) such as `"MIT"`, and run a
+crosswalk to carry the change into every metadata file.
+
+As it stands this is `crosswalk(git_dir, license = license)`: `Project.toml`,
+`codemeta.json` and `.zenodo.json` take the new license, the `LICENSE` file is
+written for it, and the julia source files that were marked with the old
+license are marked with the new one. Files marked with one of the
+`additional_licenses` of the `[rsmd]` table are left as they are, and the
+crosswalk still stops, changing nothing, if a file is marked with a license
+that has not been declared.
+
+If `overwrite_all` is true, nothing about the existing licensing is kept, and
+none of it can stop the crosswalk: `additional_licenses` is removed, every
+license file (`LICENSE`, `LICENCE` or `COPYING`, with or without a `.md` or
+`.txt` extension) is removed and `LICENSE` written in their place, even where
+one already held `license` in its own words, and every julia source file is
+marked with `license` whatever it was marked with before. This is the way out
+when the licensing of a repository has become inconsistent, and the way to
+hand over a license file of your own to be maintained by the crosswalk. It
+relabels files regardless of who wrote them, so whether they may be
+relicensed is for you to establish first; what it replaces can be recovered
+from git if it had been committed.
+
+The crosswalk throws an error, and nothing is changed, if `license` is not an
+identifier SPDX recognises or a remote metadata query cannot be completed.
+"""
+function relicense!(license::AbstractString,
+                    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`);
+                    overwrite_all::Bool = false)
+    return run_crosswalk(git_dir, category = nothing, keywords = nothing,
+                         license = license, build = false, update = false,
+                         overwrite_all = overwrite_all)
+end
+
+# The crosswalk itself, which `crosswalk` and `relicense!` both run. With
+# `overwrite_all` every license file and source file header is put under
+# `license`, whatever it held, and the additional licenses are dropped
+function run_crosswalk(git_dir::AbstractString; category, keywords,
+                       license::Union{AbstractString, Nothing}, build,
+                       update, overwrite_all::Bool)
     project = read_project(git_dir)
     rsmd = get!(project, "rsmd", OrderedDict{String, Any}())
     proj_version = VersionNumber(project["version"])
@@ -374,6 +423,7 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     open_license = spdx["isOsiApproved"]
 
     # Licenses the package declares that some of its files are under instead
+    overwrite_all && delete!(rsmd, "additional_licenses")
     additional_licenses = String.(vcat(get(rsmd, "additional_licenses",
                                            String[])))
     for additional in additional_licenses
@@ -400,7 +450,8 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         license_text(spdx["licenseText"], years, earlier_names)]
     license_changes = license_file_changes(git_dir, license_id, generated,
                                            replace = update ||
-                                                     !isnothing(license))
+                                                     !isnothing(license),
+                                           overwrite = overwrite_all)
 
     cm_authors = get(codemeta, "author", OrderedDict{String, Any}[])
     proj_authors = rsmd["author_details"]
@@ -594,21 +645,24 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
 
     new_headers = header_changes(git_dir, license_id,
                                  additional = additional_licenses,
-                                 previous = previous_licenses)
+                                 previous = previous_licenses,
+                                 overwrite = overwrite_all)
 
     # All remote queries have succeeded, so the files can now be written
-    if license_changes.write
-        file = joinpath(git_dir, "LICENSE")
-        open(file, "w") do io
-            return write(io, license_content)
-        end
-    end
+    # Removed before LICENSE is written: on a file system that ignores case, a
+    # file called License is the same file as LICENSE
     for file in license_changes.remove
         rm(file)
         @info license_changes.write ?
               "Replaced $(basename(file)) with LICENSE" :
               "Removed $(basename(file)), which did not hold the " *
               "$license_id license"
+    end
+    if license_changes.write
+        file = joinpath(git_dir, "LICENSE")
+        open(file, "w") do io
+            return write(io, license_content)
+        end
     end
 
     file = joinpath(git_dir, "Project.toml")

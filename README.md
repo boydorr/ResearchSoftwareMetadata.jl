@@ -109,6 +109,18 @@ ResearchSoftwareMetadata.crosswalk(update = true)
 
 The change is then carried into the other files and reported as information. Without `update = true` the crosswalk treats a disagreement between `Project.toml` and the other files as a possible mistake: it still brings the other files into line, but reports each change as a warning or an error, and it refuses a changed license altogether, rewriting nothing, because a license should never change by accident. The `increase_patch()`, `increase_minor()` and `increase_major()` functions run the crosswalk with `update = true` themselves.
 
+To move a package to a different license, or to start again when its licensing has got into a tangle, use `relicense!`:
+
+```julia
+# Move the package to a new license
+ResearchSoftwareMetadata.relicense!("MIT")
+
+# Put everything under the new license, whatever it was under before
+ResearchSoftwareMetadata.relicense!("MIT", overwrite_all = true)
+```
+
+The first form is the same as `crosswalk(license = "MIT")`: files listed under `additional_licenses` keep their own license, and a file marked with a license you have not declared still stops it. The second form overrides all of that: it removes `additional_licenses`, replaces every license file with a newly written `LICENSE`, and marks every julia file with the new license. It relabels files whoever wrote them, so make sure you are entitled to relicense them first.
+
 You might also consider reformatting all of your julia code to a consistent format. A `.JuliaFormatter.toml` file in the package root defines what the formatting standard should be.
 
 ```julia

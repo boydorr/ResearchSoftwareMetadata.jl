@@ -1086,6 +1086,108 @@ end
     end
 end
 
+@testset "Relicensing" begin
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    relicense! = ResearchSoftwareMetadata.relicense!
+    names(dir) = basename.(ResearchSoftwareMetadata.license_files(dir))
+    other = "# SPDX-License-Identifier: BSD-3-Clause\n\nx = 1\n"
+    relicensed = "# SPDX-License-Identifier: BSD-2-Clause\n\nx = 1\n"
+    # A fixture with a license file of the user's own, in LICENSE.md, and a
+    # file under another license, which is declared only if asked for
+    function tangled(dir; declared)
+        make_fixture(dir)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        own = replace(read(joinpath(dir, "LICENSE"), String),
+                      "Ann B Smith" => "The Original Holder")
+        mv(joinpath(dir, "LICENSE"), joinpath(dir, "LICENSE.md"))
+        write(joinpath(dir, "LICENSE.md"), own)
+        write(joinpath(dir, "src", "other.jl"), other)
+        declared && declare_additional(dir, ["BSD-3-Clause"])
+        return own
+    end
+    additional(dir) = get(TOML.parsefile(joinpath(dir, "Project.toml"))["rsmd"],
+                          "additional_licenses", nothing)
+
+    # As it stands, relicensing respects what the package has declared ...
+    mktempdir() do dir
+        own = tangled(dir, declared = true)
+        @test isnothing(relicense!("MIT", dir))
+        cd(git_dir) # crosswalk leaves the working directory changed
+        @test read(joinpath(dir, "LICENSE.md"), String) == own
+        @test isnothing(relicense!("BSD-2-Clause", dir))
+        cd(git_dir)
+        @test fixture_licenses(dir) == all_licensed("BSD-2-Clause")
+        @test names(dir) == ["LICENSE"]
+        @test read(joinpath(dir, "src", "other.jl"), String) == other
+        @test additional(dir) == ["BSD-3-Clause"]
+    end
+    # ... and stops at what it has not
+    mktempdir() do dir
+        tangled(dir, declared = false)
+        before = fixture_files(dir)
+        @test_throws "src/other.jl: BSD-3-Clause" relicense!("BSD-2-Clause",
+                                                             dir)
+        cd(git_dir)
+        @test fixture_files(dir) == before
+    end
+
+    # Overwriting everything does neither
+    for declared in (true, false)
+        mktempdir() do dir
+            tangled(dir, declared = declared)
+            @test isnothing(relicense!("BSD-2-Clause", dir,
+                                       overwrite_all = true))
+            cd(git_dir)
+            @test fixture_licenses(dir) == all_licensed("BSD-2-Clause")
+            @test names(dir) == ["LICENSE"]
+            @test occursin("Ann B Smith",
+                           read(joinpath(dir, "LICENSE"), String))
+            @test read(joinpath(dir, "src", "other.jl"), String) == relicensed
+            @test isnothing(additional(dir))
+            # The package is consistent afterwards
+            before = fixture_files(dir)
+            @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+            cd(git_dir)
+            @test fixture_files(dir) == before
+        end
+    end
+    # ... even to the license the package has, which hands over a license
+    # file of the user's own to be kept up to date
+    mktempdir() do dir
+        tangled(dir, declared = true)
+        @test isnothing(relicense!("MIT", dir, overwrite_all = true))
+        cd(git_dir)
+        @test names(dir) == ["LICENSE"]
+        @test occursin("Ann B Smith", read(joinpath(dir, "LICENSE"), String))
+    end
+
+    # A license that SPDX does not have changes nothing, whichever way
+    for overwrite_all in (false, true)
+        mktempdir() do dir
+            tangled(dir, declared = true)
+            before = fixture_files(dir)
+            @test_throws "not a recognised SPDX" relicense!("nonsense", dir,
+                                                            overwrite_all = overwrite_all)
+            cd(git_dir)
+            @test fixture_files(dir) == before
+        end
+    end
+
+    # A file this package wrote is not lost where the file system ignores case
+    mktempdir() do dir
+        make_fixture(dir)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        cd(git_dir)
+        # In two steps, as the names are one file where case is ignored
+        mv(joinpath(dir, "LICENSE"), joinpath(dir, "renaming"))
+        mv(joinpath(dir, "renaming"), joinpath(dir, "License"))
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        cd(git_dir)
+        @test names(dir) == ["LICENSE"]
+        @test startswith(read(joinpath(dir, "LICENSE"), String), "MIT License")
+    end
+end
+
 @testset "Failed crosswalk leaves files unchanged" begin
     git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     mktempdir() do dir
