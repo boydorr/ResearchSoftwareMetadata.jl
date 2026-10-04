@@ -1,10 +1,17 @@
 # SPDX-License-Identifier: MIT
 
 """
-    increase_patch()
+    increase_patch(git_dir)
 
-Increases the `Project.toml` version number by a patch (e.g. 0.4.1 to 0.4.2), and then
-runs `ResearchSoftwareMetadata.crosswalk()` to propagate this information.
+Increase the version number in the `Project.toml` of a package by a patch (e.g. 0.4.1 to
+0.4.2), and then run `ResearchSoftwareMetadata.crosswalk(git_dir, update = true)` to
+propagate the new version to the other metadata files. If the crosswalk fails,
+`Project.toml` is left as it was.
+
+# Arguments
+
+  - `git_dir`: the repository holding the package. It defaults to the repository that
+    the working directory is in.
 """
 function increase_patch(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
     project = read_project(git_dir)
@@ -29,10 +36,17 @@ function increase_patch(git_dir = readchomp(`$(Git.git()) rev-parse --show-tople
 end
 
 """
-    increase_minor()
+    increase_minor(git_dir)
 
-Increases the `Project.toml` version number by a minor number (e.g. 0.4.1 to 0.5.0), and then
-runs `ResearchSoftwareMetadata.crosswalk()` to propagate this information.
+Increase the version number in the `Project.toml` of a package by a minor number (e.g. 0.4.1 to
+0.5.0), and then run `ResearchSoftwareMetadata.crosswalk(git_dir, update = true)` to
+propagate the new version to the other metadata files. If the crosswalk fails,
+`Project.toml` is left as it was.
+
+# Arguments
+
+  - `git_dir`: the repository holding the package. It defaults to the repository that
+    the working directory is in.
 """
 function increase_minor(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
     project = read_project(git_dir)
@@ -57,10 +71,17 @@ function increase_minor(git_dir = readchomp(`$(Git.git()) rev-parse --show-tople
 end
 
 """
-    increase_major()
+    increase_major(git_dir)
 
-Increases the `Project.toml` version number by a major number (e.g. 0.4.1 to 1.0.0), and then
-runs `ResearchSoftwareMetadata.crosswalk()` to propagate this information.
+Increase the version number in the `Project.toml` of a package by a major number (e.g. 0.4.1 to
+1.0.0), and then run `ResearchSoftwareMetadata.crosswalk(git_dir, update = true)` to
+propagate the new version to the other metadata files. If the crosswalk fails,
+`Project.toml` is left as it was.
+
+# Arguments
+
+  - `git_dir`: the repository holding the package. It defaults to the repository that
+    the working directory is in.
 """
 function increase_major(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
     project = read_project(git_dir)

@@ -21,7 +21,7 @@ built and installed with `add`. For example:
 (@v1.12) pkg> add ResearchSoftwareMetadata
    Resolving package versions...
     Updating `~/.julia/environments/v1.12/Project.toml`
-  [58378933] + ResearchSoftwareMetadata v0.3.0
+  [58378933] + ResearchSoftwareMetadata v0.4.0
     Updating `~/.julia/environments/v1.12/Manifest.toml`
 
 (@v1.12) pkg>
@@ -29,9 +29,7 @@ built and installed with `add`. For example:
 
 ## Usage
 
-First you need to add a small amount of additional metadata into your `Project.toml` file.
-
-To  capture the license you are using and propagate it throughout the metadata files and through your julia code, add an [SPDX license identifier](https://spdx.org/licenses/) to the file:
+The crosswalk runs on a package that is a git repository with a remote. The one piece of metadata it cannot do without is a license. To capture the license you are using and propagate it throughout the metadata files and through your julia code, add an [SPDX license identifier](https://spdx.org/licenses/) to your `Project.toml` file:
 
 ```toml
 license = "BSD-2-Clause"
@@ -41,7 +39,7 @@ A package has to have a license: the crosswalk stops with an error if it finds n
 
 If the package has no license file, the crosswalk writes a `LICENSE` for that license, naming the people in the `authors` field of `Project.toml` as the copyright holders, so make sure `authors` is right first. A license file you already have is left exactly as it is, provided it holds that license.
 
-The crosswalk records the license on the first line of every julia file, as `# SPDX-License-Identifier: BSD-2-Clause`. If some files are deliberately under a different license, give each of them its own first line naming that license, and list those licenses in the `[rsmd]` table described next, so that the crosswalk knows they are intended and leaves them alone:
+The crosswalk records the license on the first line of every julia file, as `# SPDX-License-Identifier: BSD-2-Clause`. If some files are deliberately under a different license, give each of them its own first line naming that license, and list those licenses in the `[rsmd]` table described below, so that the crosswalk knows they are intended and leaves them alone:
 
 ```toml
 [rsmd]
@@ -49,30 +47,6 @@ additional_licenses = ["MIT"]
 ```
 
 A file marked with a license that is neither the package's nor in that list stops the crosswalk with an error.
-
-All of the other metadata that this package uses lives in a single `[rsmd]` table. To supplement the metadata on the authors of the package, add the [ORCID](https://orcid.org) for each author and the [ROR](https://ror.org) for the organisation(s) they are affiliated with. You can add as many authors and as much or as little information as you like about each one by adding additional `[[rsmd.author_details]]` blocks.
-
-```toml
-[rsmd]
-
-    [[rsmd.author_details]]
-    name = "Richard Reeve"
-    orcid = "0000-0003-2589-8091"
-
-        [[rsmd.author_details.affiliation]]
-        ror = "00vtgdb53"
-```
-
-You can also optionally add a `description` of the package, `keywords` associated with it, the software `category` it belongs to, its [repostatus.org](https://www.repostatus.org) `development_status`, and the DOIs of any `publications` associated with the package. All of these are propagated into `codemeta.json` and `.zenodo.json`, and any values already in `codemeta.json` but missing from `Project.toml` will be backfilled into it. Any of these keys found at the top level of `Project.toml` (the old layout) are automatically migrated into `[rsmd]`:
-
-```toml
-[rsmd]
-keywords = ["julia", "metadata"]
-category = "metadata"
-description = "A package that does things"
-development_status = "active"
-publications = ["10.5281/zenodo.12789179"]
-```
 
 Then, from the root of your package, you can just run a crosswalk:
 
@@ -88,9 +62,40 @@ using ResearchSoftwareMetadata
 ResearchSoftwareMetadata.crosswalk()
 ```
 
+The first crosswalk writes `codemeta.json` and `.zenodo.json`, and creates an `[rsmd]` table in `Project.toml`, which is where all of the other metadata that this package uses lives. It warns about whatever it still needs for a complete record: work through those warnings as described below, running the crosswalk again until there are none.
+
+The crosswalk makes an `[[rsmd.author_details]]` block for each person in the `authors` field. To supplement the metadata on the authors of the package, add to those blocks the [ORCID](https://orcid.org) for each author and the [ROR](https://ror.org) for the organisation(s) they are affiliated with. You can add as many authors and as much or as little information as you like about each one by adding additional `[[rsmd.author_details]]` blocks.
+
+```toml
+[rsmd]
+
+    [[rsmd.author_details]]
+    name = "Richard Reeve"
+    orcid = "0000-0003-2589-8091"
+
+        [[rsmd.author_details.affiliation]]
+        ror = "00vtgdb53"
+```
+
+The crosswalk warns until the package has a `description` and the software `category` it belongs to. You can also add `keywords` associated with the package, its [repostatus.org](https://www.repostatus.org) `development_status`, and the DOIs of any `publications` associated with it; if you do not, the keywords start as `["julia"]` and the development status as `"active"`. All of these are propagated into `codemeta.json` and `.zenodo.json`, and any values already in `codemeta.json` but missing from `Project.toml` will be backfilled into it. Any of these keys found at the top level of `Project.toml` (the old layout) are automatically migrated into `[rsmd]`:
+
+```toml
+[rsmd]
+keywords = ["julia", "metadata"]
+category = "metadata"
+description = "A package that does things"
+development_status = "active"
+publications = ["10.5281/zenodo.12789179"]
+```
+
+The crosswalk also warns until it has been told where the build instructions for the package are, which you do once, when you run it: `build = true` if they are in the README, or their address if they are somewhere else.
+
 If you want to pass in some additional metadata (the `category` of the software or the `keywords` associated with it, both of which are written back into `[rsmd]` in `Project.toml`, or its `license`), or you want to increase the package version during the crosswalk, you can do that as follows:
 
 ```julia
+# Say that the build instructions are in the README
+ResearchSoftwareMetadata.crosswalk(build = true)
+
 # Add in additional metadata
 ResearchSoftwareMetadata.crosswalk(category = "metadata", keywords = ["julia", "metadata", "research software", "RSMD"])
 
@@ -123,14 +128,12 @@ ResearchSoftwareMetadata.relicense!("MIT", overwrite_all = true)
 
 The first form is the same as `crosswalk(license = "MIT")`: files listed under `additional_licenses` keep their own license, and a file marked with a license you have not declared still stops it. The second form overrides all of that: it removes `additional_licenses`, replaces every license file with a newly written `LICENSE`, and marks every julia file with the new license. It relabels files whoever wrote them, so make sure you are entitled to relicense them first.
 
-You might also consider reformatting all of your julia code to a consistent format. A `.JuliaFormatter.toml` file in the package root defines what the formatting standard should be.
+You might also consider reformatting all of your julia code to a consistent format. A `.JuliaFormatter.toml` file in the package root defines what the formatting standard should be. From the root of your package:
 
 ```julia
 Pkg.add("JuliaFormatter")
-Pkg.develop("MyPackage")
 using JuliaFormatter
-using MyPackage
-format(MyPackage)
+format(".")
 ```
 
 ## Automated checking

@@ -4,42 +4,72 @@
     crosswalk(git_dir; category = nothing, keywords = nothing,
               license = nothing, build = false, update = false)
 
-Runs a crosswalk across `Project.toml`, `LICENSE`, `codemeta.json` and `.zenodo.json` as
-well as the julia source files to enforce consistency between the different metadata formats.
-It logs warnings and errors if it identifies inconsistencies while it is editing the files.
+Run a crosswalk across `Project.toml`, `codemeta.json`, `.zenodo.json`, the license file
+and the julia source files of a package, to enforce consistency between the different
+metadata formats, and return `nothing`.
+
 `Project.toml` is the authoritative source of metadata: as well as its standard fields, the
 optional keys `description`, `keywords`, `category`, `development_status` and
 `publications` (a vector of DOIs of associated papers) in its `[rsmd]` table are propagated
 into `codemeta.json` and `.zenodo.json`; values found only in `codemeta.json` are backfilled
 into `Project.toml`. Legacy top-level copies of these keys are migrated into `[rsmd]`.
-A missing `author_details` section is likewise constructed from `codemeta.json` or
+The crosswalk logs warnings and errors if it identifies inconsistencies while it is editing
+the files.
+
+# Arguments
+
+  - `git_dir`: the repository holding the package. It defaults to the repository that
+    the working directory is in.
+  - `category`: the software category. It takes precedence over the one in `Project.toml`
+    and is written back into it.
+  - `keywords`: a vector of keyword strings, which likewise takes precedence and is
+    written back.
+  - `license`: an [SPDX identifier](https://spdx.org/licenses/) such as `"MIT"`, to set the
+    license of the package or to change it. It is written back into `Project.toml`.
+  - `build`: where the build instructions are, for the `buildInstructions` RSMD field.
+    `false` leaves the instructions as is, `true` sets it to the same as the README, and a
+    string sets it to that value.
+  - `update`: if true, changes to `Project.toml` (e.g. to the version or the license) are
+    treated as deliberate and propagated to the other metadata files with `@info` messages
+    instead of being reported as warnings or errors.
+
+# Authors
+
+A missing `author_details` section in `[rsmd]` is constructed from `codemeta.json` or
 `.zenodo.json`, provided the information there is consistent with the definitive `authors`
-field. New entries in `authors` are propagated into `rsmd.author_details` (with a warning to
-add their ORCID and ROR affiliation there), `codemeta.json` and `.zenodo.json`, while authors
-in `codemeta.json` that are missing from `authors` are removed with an error.
-The software category can be set with the `category` argument, likewise the `keywords`
-argument can contain a vector of keyword strings; both take precedence over and are written
-back into `Project.toml`. The `build` argument sets the `buildInstructions` RSMD
-field - `false` leaves the instructions as is, `true` sets it to the same as the README,
-and a string sets it to that value. If `update` is true, changes to `Project.toml` (e.g. to
-the version or the license) are treated as deliberate and propagated to the other metadata
-files with `@info` messages instead of being reported as warnings or errors.
-The license is an [SPDX identifier](https://spdx.org/licenses/) such as `"MIT"`, taken
-from `license` in `Project.toml` or, failing that, from `codemeta.json`; the crosswalk
-throws an error if there is none or if it is not one SPDX recognises. The `license` argument
-sets or changes it, and like `category` is written back into `Project.toml`. A license in
-`Project.toml` that differs from the one already in `codemeta.json` is an error, and
-nothing is changed, unless `update` is true or the `license` argument is given.
-Every julia source file is given a first line naming the license. A file that is deliberately
-under a different license keeps its own first line, provided that license is listed under
-`additional_licenses` in the `[rsmd]` table; a file marked with any other license is an
-error, and nothing is changed.
-The dates of a version that has no release tag yet are today's date, in UTC, whenever
-the crosswalk is run on the repository's default branch or with `update` true; on any
-other branch the dates already recorded for that version are kept.
-If any remote metadata query (orcid.org, ror.org, spdx.org,
-doi.org or Julia's General registry) cannot be completed, the crosswalk throws an error and
-all files are left in their original state.
+field, and otherwise from `authors` itself. New entries in `authors` are propagated into
+`rsmd.author_details` (with a warning to add their ORCID and ROR affiliation there),
+`codemeta.json` and `.zenodo.json`, while authors in `codemeta.json` that are missing from
+`authors` are removed with an error.
+
+# License
+
+The license is an SPDX identifier, taken from the `license` argument, from `license` in
+`Project.toml` or, failing that, from `codemeta.json`; the crosswalk throws an error if
+there is none or if it is not one SPDX recognises. A license in `Project.toml` that
+differs from the one already in `codemeta.json` is an error, and nothing is changed, unless
+`update` is true or the `license` argument is given.
+
+If the package has no license file, a `LICENSE` is written. A license file that the
+crosswalk did not write is left as it is if it holds the license, and is an error if it
+does not, unless the license is being changed.
+
+Every julia source file is given a first line naming the license. A file that is
+deliberately under a different license keeps its own first line, provided that license is
+listed under `additional_licenses` in the `[rsmd]` table; a file marked with any other
+license is an error, and nothing is changed.
+
+# Dates
+
+The dates of a version that has no release tag yet are today's date, in UTC, whenever the
+crosswalk is run on the repository's default branch or with `update` true; on any other
+branch the dates already recorded for that version are kept.
+
+# Failure
+
+If any remote metadata query (orcid.org, ror.org, spdx.org, doi.org or Julia's General
+registry) cannot be completed, the crosswalk throws an error and all files are left in
+their original state.
 """
 function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`);
                    category = nothing, keywords = nothing,
@@ -53,9 +83,21 @@ end
 """
     relicense!(license, git_dir; overwrite_all = false)
 
-Relicense the package in the repository at `git_dir` under `license`, an
-[SPDX identifier](https://spdx.org/licenses/) such as `"MIT"`, and run a
-crosswalk to carry the change into every metadata file.
+Relicense a package, and run a crosswalk to carry the change into every
+metadata file.
+
+# Arguments
+
+  - `license`: the [SPDX identifier](https://spdx.org/licenses/) of the new
+    license, such as `"MIT"`.
+  - `git_dir`: the repository holding the package. It defaults to the
+    repository that the working directory is in.
+  - `overwrite_all`: if true, replace every existing license file and source
+    file header and drop `additional_licenses`, keeping nothing of the
+    existing licensing. The default, false, respects what the package has
+    declared.
+
+# Keeping or overwriting the existing licensing
 
 As it stands this is `crosswalk(git_dir, license = license)`: `Project.toml`,
 `codemeta.json` and `.zenodo.json` take the new license, the `LICENSE` file is
@@ -76,6 +118,8 @@ hand over a license file of your own to be maintained by the crosswalk. It
 relabels files regardless of who wrote them, so whether they may be
 relicensed is for you to establish first; what it replaces can be recovered
 from git if it had been committed.
+
+# Failure
 
 The crosswalk throws an error, and nothing is changed, if `license` is not an
 identifier SPDX recognises or a remote metadata query cannot be completed.

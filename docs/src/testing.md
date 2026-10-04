@@ -6,7 +6,9 @@ verify that its metadata and formatting stay clean: that running
 are committed (so the metadata is consistent and up to date), and that running
 [JuliaFormatter](https://github.com/domluna/JuliaFormatter.jl) leaves the source code
 unchanged (so the code is well formatted). If either check would change a file, the test
-fails until you re-run the crosswalk or formatter and commit the result.
+fails until you re-run the crosswalk or formatter and commit the result. The crosswalk
+check also fails if the crosswalk logs a warning, so the package's metadata has to be
+complete, with a description, a category and build instructions, as well as consistent.
 
 This is how ResearchSoftwareMetadata tests itself, and the test files are written so that
 they can be copied into any other package.
@@ -153,9 +155,11 @@ package's, that looks like:
 
 Some things to be aware of:
 
-- The crosswalk queries orcid.org, ror.org, spdx.org and the Julia General registry, so
-  the runner needs network access, and it interrogates the git history and tags, so the
-  repository must be checked out in full (`fetch-depth: 0` on `actions/checkout`).
+- The crosswalk queries orcid.org, ror.org, spdx.org, doi.org and the Julia General
+  registry, and for a version that has not been released it asks your git remote which
+  branch is its default, so the runner needs network access. It also interrogates the git
+  history and tags, so the repository must be checked out in full (`fetch-depth: 0` on
+  `actions/checkout`).
 - Windows runners are skipped by both checks (marked as broken) due to file writing
   issues.
 - Until a version has a release tag, its dates in `codemeta.json` are provisional. On
