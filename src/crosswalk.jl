@@ -34,6 +34,9 @@ Every julia source file is given a first line naming the license. A file that is
 under a different license keeps its own first line, provided that license is listed under
 `additional_licenses` in the `[rsmd]` table; a file marked with any other license is an
 error, and nothing is changed.
+The dates of a version that has no release tag yet are today's date, in UTC, whenever
+the crosswalk is run on the repository's default branch or with `update` true; on any
+other branch the dates already recorded for that version are kept.
 If any remote metadata query (orcid.org, ror.org, spdx.org,
 doi.org or Julia's General registry) cannot be completed, the crosswalk throws an error and
 all files are left in their original state.
@@ -95,14 +98,14 @@ function run_crosswalk(git_dir::AbstractString; category, keywords,
     rsmd = get!(project, "rsmd", OrderedDict{String, Any}())
     proj_version = VersionNumber(project["version"])
 
-    now = string(today())
+    now = utc_today()
     git = `$(Git.git()) -C $git_dir`
     init = readchomp(`$git log --max-parents=0 --format=%ad --date=short -n 1`)
     releases = release_tags(git_dir)
     latest = isempty(releases) ? nothing :
              argmax(release -> release.version, releases)
     tag = isnothing(latest) ? proj_version : latest.version
-    tag_date = isnothing(latest) ? now :
+    tag_date = isnothing(latest) ? nothing :
                readchomp(`$git log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/$(latest.name)`)
     remotes = readlines(`$git remote`)
     isempty(remotes) &&
@@ -222,6 +225,22 @@ function run_crosswalk(git_dir::AbstractString; category, keywords,
 
     cm_version = VersionNumber(get!(codemeta, "version", string(proj_version)))
 
+    # A version with no release tag has no date of its own, so the dates given
+    # to it are provisional. They are brought up to today on the default
+    # branch, which releases are made from, and by a deliberate run. On any
+    # other branch the ones already written for this version are kept, so that
+    # they do not change with the day the crosswalk is run
+    unreleased = isnothing(latest) || proj_version > tag
+    keep_dates = unreleased && !update && cm_version == proj_version &&
+                 haskey(codemeta, "dateModified") &&
+                 !on_default_branch(git_dir, remotes[repo_index])
+    keep_dates &&
+        @info "Keeping the dates of this unreleased version, which are " *
+              "brought up to date on the default branch or by " *
+              "`crosswalk(update = true)`"
+    provisional_date = keep_dates ? codemeta["dateModified"] : now
+    isnothing(tag_date) && (tag_date = provisional_date)
+
     if proj_version == tag
         @debug "Still on latest release version: $tag"
         codemeta["dateModified"] = tag_date
@@ -242,12 +261,12 @@ function run_crosswalk(git_dir::AbstractString; category, keywords,
         end
     elseif proj_version > tag
         @info "Preparing for new release"
-        codemeta["dateModified"] = now
+        codemeta["dateModified"] = provisional_date
         if cm_version ≠ proj_version
             @info "Updating codemeta tag version ($cm_version) to " *
                   "new release ($proj_version)"
             cm_version = proj_version
-            this_year = string(year(Date(now)))
+            this_year = string(year(Date(provisional_date)))
             if this_year ≠ years
                 years = years * "-" * this_year
             end
@@ -274,8 +293,15 @@ function run_crosswalk(git_dir::AbstractString; category, keywords,
             codemeta["datePublished"] == first_release_date ||
                 @warn "codemeta.json publication date inconsistent with Julia's General registry, fixing ($(codemeta["datePublished"]) ≠ $first_release_date)"
         end
-        codemeta["datePublished"] = first_release_date
+    elseif !isempty(releases)
+        # Not registered, but released: the earliest release tag has the date
+        first_release = argmin(release -> release.version, releases)
+        first_release_date = readchomp(`$git log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/$(first_release.name)`)
+    else
+        first_release_date = keep_dates ?
+                             get(codemeta, "datePublished", now) : now
     end
+    codemeta["datePublished"] = first_release_date
     project["version"] = string(proj_version)
     codemeta["version"] = "v$cm_version"
 

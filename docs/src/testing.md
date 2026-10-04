@@ -158,6 +158,12 @@ Some things to be aware of:
   repository must be checked out in full (`fetch-depth: 0` on `actions/checkout`).
 - Windows runners are skipped by both checks (marked as broken) due to file writing
   issues.
+- Until a version has a release tag, its dates in `codemeta.json` are provisional. On
+  your default branch every crosswalk sets them to today's date (in UTC), so there the
+  check fails on any later day until the crosswalk is run again; that is what keeps the
+  dates right in the code you release. On any other branch, and so in a pull request, the
+  dates are left as they are, and `ResearchSoftwareMetadata.crosswalk(update = true)` or
+  one of the `increase_` functions brings them up to date.
 - On CI the repository must be *strictly* clean — no staged, unstaged or untracked
   changes after the checks run. Locally the criterion is relaxed: only unstaged changes
   fail the tests, so work you have already staged doesn't stop you running the suite.

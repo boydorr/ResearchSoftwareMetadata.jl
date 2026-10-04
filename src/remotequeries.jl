@@ -122,9 +122,9 @@ end
     ResearchSoftwareMetadata.get_first_release_date()
 
 Returns the first release date of this package on Julia's `General`
-Registry, or today's date if the package has not been registered yet.
-The date is that of the repository's tag for the release. Throws an error
-if the repository has no such tag, or if the registry cannot be reached or
+Registry, or `nothing` if the package has not been registered. The date is
+that of the repository's tag for the release. Throws an error if the
+repository has no such tag, or if the registry cannot be reached or
 returns an unexpected HTTP status.
 """
 function get_first_release_date(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`))
@@ -147,8 +147,8 @@ function get_first_release_date(git_dir = readchomp(`$(Git.git()) rev-parse --sh
         tag = releases[release].name
         return readchomp(`$(Git.git()) -C $git_dir log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/$tag`)
     elseif response.status == 404
-        @info "No release yet on General, imputing first release will be today"
-        return string(today())
+        @info "No release yet on General"
+        return nothing
     end
 
     return error("Unable to query Julia's General registry for $package, " *

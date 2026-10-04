@@ -1146,6 +1146,121 @@ end
     end
 end
 
+@testset "Dates before a release" begin
+    today = ResearchSoftwareMetadata.utc_today()
+    @test occursin(r"^\d{4}-\d{2}-\d{2}$", today)
+    git(dir, arguments...) = run(`$(Git.git()) -C $dir $arguments`)
+    stale = "2001-02-03"
+    # The dates as codemeta.json has them
+    function dates(dir)
+        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+        return (modified = codemeta["dateModified"],
+                published = codemeta["datePublished"])
+    end
+    # Make the dates in codemeta.json those of a crosswalk on an earlier day
+    function age(dir)
+        file = joinpath(dir, "codemeta.json")
+        aged = replace(read(file, String),
+                       r"(\"date(Modified|Published)\": \")[^\"]*" =>
+                           SubstitutionString("\\g<1>" * stale))
+        return write(file, aged)
+    end
+    # A fixture whose remote is a repository beside it, with main as its default
+    function with_remote(test)
+        return mktempdir() do parent
+            remote = joinpath(parent, "remote.git")
+            dir = mkdir(joinpath(parent, "fixture"))
+            run(`$(Git.git()) init -q --bare -b main $remote`)
+            make_fixture(dir, remote = remote)
+            git(dir, "push", "-q", "origin", "main")
+            return test(dir)
+        end
+    end
+
+    @testset "The default branch" begin
+        with_remote() do dir
+            @test ResearchSoftwareMetadata.default_branch(dir, "origin") ==
+                  "main"
+            @test ResearchSoftwareMetadata.on_default_branch(dir, "origin")
+            git(dir, "checkout", "-q", "-b", "feature")
+            @test !ResearchSoftwareMetadata.on_default_branch(dir, "origin")
+            # No branch is checked out when a pull request is tested
+            git(dir, "checkout", "-q", "--detach")
+            @test !ResearchSoftwareMetadata.on_default_branch(dir, "origin")
+        end
+        # A remote that cannot be asked, and nothing recorded for it
+        mktempdir() do dir
+            make_fixture(dir)
+            @test isnothing(ResearchSoftwareMetadata.default_branch(dir,
+                                                                    "origin"))
+            @test ResearchSoftwareMetadata.on_default_branch(dir, "origin")
+            # What was recorded when the repository was cloned is used
+            git(dir, "symbolic-ref", "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/dev")
+            @test ResearchSoftwareMetadata.default_branch(dir, "origin") ==
+                  "dev"
+            @test !ResearchSoftwareMetadata.on_default_branch(dir, "origin")
+        end
+    end
+
+    # No release tag: on the default branch the dates are today's every time
+    with_remote() do dir
+        @test isnothing(ResearchSoftwareMetadata.get_first_release_date(dir))
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir, build = true))
+        @test dates(dir) == (modified = today, published = today)
+        age(dir)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        @test dates(dir) == (modified = today, published = today)
+
+        # On another branch they are kept, until a deliberate run
+        git(dir, "checkout", "-q", "-b", "feature")
+        age(dir)
+        @test_logs (:info, r"Keeping the dates of this unreleased version") match_mode=:any ResearchSoftwareMetadata.crosswalk(dir)
+        @test dates(dir) == (modified = stale, published = stale)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir, update = true))
+        @test dates(dir) == (modified = today, published = today)
+
+        # Dates written for another version are not this version's to keep
+        age(dir)
+        toml = joinpath(dir, "Project.toml")
+        project = TOML.parsefile(toml)
+        project["version"] = "0.2.0"
+        open(toml, "w") do io
+            return TOML.print(io, project)
+        end
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        @test dates(dir) == (modified = today, published = today)
+    end
+
+    # A version bumped since the last release tag is in the same position, and
+    # a package that is released but not registered was published with its tag
+    with_remote() do dir
+        git(dir, "tag", "v0.1.0")
+        released = readchomp(`$(Git.git()) -C $dir log -1 --format=%ad
+                              --date=short`)
+        git(dir, "checkout", "-q", "-b", "feature")
+        @test isnothing(ResearchSoftwareMetadata.increase_minor(dir))
+        @test dates(dir) == (modified = today, published = released)
+        age(dir)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        @test dates(dir) == (modified = stale, published = released)
+        git(dir, "branch", "-q", "-M", "main")
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        @test dates(dir) == (modified = today, published = released)
+    end
+
+    # A released version has the date of its tag, whatever the branch or the day
+    with_remote() do dir
+        git(dir, "tag", "v0.1.0")
+        released = readchomp(`$(Git.git()) -C $dir log -1 --format=%ad
+                              --date=short`)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir, build = true))
+        age(dir)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        @test dates(dir) == (modified = released, published = released)
+    end
+end
+
 @testset "Links to the default branch" begin
     web = "https://github.com/example/RSMDFixture.jl"
     # HEAD is the default branch of the repository, whatever it is called

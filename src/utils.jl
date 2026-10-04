@@ -67,6 +67,57 @@ function release_tags(git_dir::AbstractString)
 end
 
 """
+    ResearchSoftwareMetadata.utc_today()
+
+Return today's date in UTC, as text. A date written into the metadata is
+then the same wherever the crosswalk is run: on a GitHub runner, whose
+clock is in UTC, as on a machine in any other time zone.
+"""
+utc_today() = string(Date(now(UTC)))
+
+"""
+    ResearchSoftwareMetadata.default_branch(git_dir::AbstractString,
+                                            remote::AbstractString)
+
+Return the name of the default branch of a remote of the repository at
+`git_dir`, or `nothing` if it cannot be found. The remote itself is asked,
+which is the only sure answer. If it cannot be reached, the default branch
+that the repository recorded when it was cloned is used, if there is one.
+"""
+function default_branch(git_dir::AbstractString, remote::AbstractString)
+    # Asking must fail, not wait for a password or a passphrase to be typed
+    git = addenv(`$(Git.git()) -C $git_dir`, "GIT_TERMINAL_PROMPT" => "0",
+                 "GIT_SSH_COMMAND" => "ssh -o BatchMode=yes -o ConnectTimeout=10")
+    answer = read(pipeline(ignorestatus(`$git ls-remote --symref $remote HEAD`),
+                           stderr = devnull), String)
+    asked = match(r"^ref: refs/heads/(\S+)\s+HEAD$"m, answer)
+    isnothing(asked) || return String(asked[1])
+    recorded = readchomp(pipeline(ignorestatus(`$git symbolic-ref --quiet --short
+                                                refs/remotes/$remote/HEAD`),
+                                  stderr = devnull))
+
+    return isempty(recorded) ? nothing :
+           String(chopprefix(recorded, "$remote/"))
+end
+
+"""
+    ResearchSoftwareMetadata.on_default_branch(git_dir::AbstractString,
+                                               remote::AbstractString)
+
+Check whether the branch checked out in the repository at `git_dir` is the
+default branch of `remote`, which is the branch releases are made from. It
+counts as being so if the default branch cannot be found, and as not being
+so if no branch is checked out, as when a pull request is being tested.
+"""
+function on_default_branch(git_dir::AbstractString, remote::AbstractString)
+    default = default_branch(git_dir, remote)
+    isnothing(default) && return true
+
+    return readchomp(`$(Git.git()) -C $git_dir branch --show-current`) ==
+           default
+end
+
+"""
     ResearchSoftwareMetadata.read_json(file::AbstractString)
 
 Read a JSON metadata file such as `codemeta.json` into an `OrderedDict`.
