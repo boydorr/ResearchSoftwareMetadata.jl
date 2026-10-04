@@ -26,6 +26,30 @@ function parse_author(author::AbstractString)
     return String(m.captures[1]), String(m.captures[2])
 end
 
+# Licenses to suggest to a package that has none: approved by both the FSF and
+# the OSI, and running from permissive to strong copyleft
+const SUGGESTED_LICENSES = ["MIT", "BSD-2-Clause", "Apache-2.0", "MPL-2.0",
+    "LGPL-3.0-or-later", "GPL-3.0-or-later"]
+
+# Where to find a license identifier, and which licenses to consider
+const LICENSE_ADVICE = "an SPDX identifier from https://spdx.org/licenses/. " *
+                       "We suggest a license approved by both the FSF and " *
+                       "the OSI, such as " *
+                       join(SUGGESTED_LICENSES, ", ", " or ") * "."
+
+"""
+    ResearchSoftwareMetadata.spdx_identifier(license::AbstractString)
+
+Return the bare SPDX identifier of a license that may be written as the
+address of its page on spdx.org: `https://spdx.org/licenses/MIT`, the same
+with `http` and the same with a trailing `.html` or `.json` all give `MIT`,
+as does `MIT` itself.
+"""
+function spdx_identifier(license::AbstractString)
+    return replace(strip(license), r"^https?://spdx\.org/licenses/" => "",
+                   r"\.(html|json)$" => "")
+end
+
 """
     ResearchSoftwareMetadata.read_json(file::AbstractString)
 

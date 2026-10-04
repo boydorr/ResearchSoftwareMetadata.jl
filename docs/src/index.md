@@ -36,6 +36,8 @@ To  capture the license you are using and propagate it throughout the metadata f
 license = "BSD-2-Clause"
 ```
 
+A package has to have a license: the crosswalk stops with an error if it finds none, or one that is not an identifier from that list. You can also set the license when you run the crosswalk, as shown below.
+
 All of the other metadata that this package uses lives in a single `[rsmd]` table. To supplement the metadata on the authors of the package, add the [ORCID](https://orcid.org) for each author and the [ROR](https://ror.org) for the organisation(s) they are affiliated with. You can add as many authors and as much or as little information as you like about each one by adding additional `[[rsmd.author_details]]` blocks.
 
 ```toml
@@ -75,17 +77,28 @@ ResearchSoftwareMetadata.crosswalk()
 ```
 
 
-If you want to pass in some additional metadata (the `category` of the software, or the `keywords` associated with it, both of which are written back into `[rsmd]` in `Project.toml`), or you want to increase the package version during the crosswalk, you can do that as follows:
+If you want to pass in some additional metadata (the `category` of the software or the `keywords` associated with it, both of which are written back into `[rsmd]` in `Project.toml`, or its `license`), or you want to increase the package version during the crosswalk, you can do that as follows:
 
 ```julia
 # Add in additional metadata
 ResearchSoftwareMetadata.crosswalk(category = "metadata", keywords = ["julia", "metadata", "research software", "RSMD"])
+
+# Set the license, or change it
+ResearchSoftwareMetadata.crosswalk(license = "BSD-2-Clause")
 
 # Increase version number during crosswalk
 ResearchSoftwareMetadata.increase_patch() # Bump patch version (e.g. 0.4.1 -> 0.4.2)
 ResearchSoftwareMetadata.increase_minor() # Bump minor version (e.g. 0.4.2 -> 0.5.0)
 ResearchSoftwareMetadata.increase_major() # Bump major version (e.g. 0.5.0 -> 1.0.0)
 ```
+
+If you later change the metadata in `Project.toml` on purpose (a new description or keywords, a removed author, a different license), run the crosswalk with `update = true` so that it knows the change is intended:
+
+```julia
+ResearchSoftwareMetadata.crosswalk(update = true)
+```
+
+The change is then carried into the other files and reported as information. Without `update = true` the crosswalk treats a disagreement between `Project.toml` and the other files as a possible mistake: it still brings the other files into line, but reports each change as a warning or an error, and it refuses a changed license altogether, rewriting nothing, because a license should never change by accident. The `increase_patch()`, `increase_minor()` and `increase_major()` functions run the crosswalk with `update = true` themselves.
 
 You might also consider reformatting all of your julia code to a consistent format. A `.JuliaFormatter.toml` file in the package root defines what the formatting standard should be.
 

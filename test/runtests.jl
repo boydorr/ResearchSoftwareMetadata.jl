@@ -320,11 +320,13 @@ end
 
 function make_fixture(dir; license = "MIT", extra = "", author_details = true,
                       workflows = true)
+    # A fixture with no license has neither the Project.toml entry nor a header
+    license_entry = isnothing(license) ? "" : "license = \"$license\"\n"
+    header = isnothing(license) ? "" : "# SPDX-License-Identifier: $license\n\n"
     project_content = """
                       name = "RSMDFixture"
                       uuid = "d9a1c9c6-91f3-4f9a-8b4a-9b4c8d3a1e2f"
-                      license = "$license"
-                      authors = ["Ann B Smith <ann@example.com>"]
+                      $(license_entry)authors = ["Ann B Smith <ann@example.com>"]
                       version = "0.1.0"
                       $extra
                       """
@@ -339,12 +341,10 @@ function make_fixture(dir; license = "MIT", extra = "", author_details = true,
     open(joinpath(dir, "Project.toml"), "w") do io
         return write(io, project_content)
     end
-    src_content = """
-                  # SPDX-License-Identifier: $license
-
-                  module RSMDFixture
-                  end
-                  """
+    src_content = header * """
+                           module RSMDFixture
+                           end
+                           """
     mkpath(joinpath(dir, "src"))
     open(joinpath(dir, "src", "RSMDFixture.jl"), "w") do io
         return write(io, src_content)
@@ -372,6 +372,38 @@ function make_fixture(dir; license = "MIT", extra = "", author_details = true,
          -c user.email=test@example.com commit -q -m Fixture`)
 
     return project_content, src_content
+end
+
+# The contents of every file of a fixture, to show whether anything has changed
+function fixture_files(dir)
+    files = Dict{String, String}()
+    for (root, dirs, names) in walkdir(dir)
+        filter!(!=(".git"), dirs)
+        for name in names
+            path = joinpath(root, name)
+            files[relpath(path, dir)] = read(path, String)
+        end
+    end
+
+    return files
+end
+
+# The license a fixture has in each of the places that record one
+function fixture_licenses(dir)
+    codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
+    zenodo = JSON.parsefile(joinpath(dir, ".zenodo.json"))
+    return (project = TOML.parsefile(joinpath(dir, "Project.toml"))["license"],
+            codemeta = codemeta["license"], zenodo = zenodo["license"],
+            access = zenodo["access_right"],
+            header = readline(joinpath(dir, "src", "RSMDFixture.jl")))
+end
+
+# What fixture_licenses gives when every place agrees on an open license
+function all_licensed(license)
+    return (project = license,
+            codemeta = "https://spdx.org/licenses/" * license,
+            zenodo = license, access = "open",
+            header = "# SPDX-License-Identifier: " * license)
 end
 
 @testset "Crosswalk without ORCIDs" begin
@@ -601,7 +633,7 @@ end
         src = readlines(joinpath(dir, "src", "RSMDFixture.jl"))
         @test src[1] == "# SPDX-License-Identifier: BSD-2-Clause"
     end
-    # Without update, a license mismatch is an error and is not propagated
+    # Without update, a license mismatch stops the crosswalk and changes nothing
     mktempdir() do dir
         make_fixture(dir, extra = extra)
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir, build = true))
@@ -612,10 +644,95 @@ end
         open(toml, "w") do io
             return TOML.print(io, project)
         end
-        @test_logs (:error, r"License mismatch") match_mode=:any ResearchSoftwareMetadata.crosswalk(dir)
+        before = fixture_files(dir)
+        @test_throws "License mismatch" ResearchSoftwareMetadata.crosswalk(dir)
         cd(git_dir)
-        codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
-        @test codemeta["license"] == "https://spdx.org/licenses/MIT"
+        @test fixture_files(dir) == before
+    end
+end
+
+@testset "Declaring the license" begin
+    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
+    spdx = "https://spdx.org/licenses/MIT"
+    codemeta_license(license) = "{\n    \"license\": \"$license\"\n}\n"
+
+    @test ResearchSoftwareMetadata.spdx_identifier.(["MIT", spdx,
+                                                        spdx * ".json",
+                                                        "http://spdx.org/licenses/MIT.html"
+                                                    ]) ==
+          fill("MIT", 4)
+
+    # The same license written another way in codemeta.json is not a mismatch,
+    # on the run that puts it right or on the next
+    for written in ("MIT", "http://spdx.org/licenses/MIT.html", spdx * ".json")
+        mktempdir() do dir
+            make_fixture(dir)
+            write(joinpath(dir, "codemeta.json"), codemeta_license(written))
+            @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+            @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+            cd(git_dir) # crosswalk leaves the working directory changed
+            @test fixture_licenses(dir) == all_licensed("MIT")
+        end
+    end
+
+    # A license only codemeta.json has is taken up, however it is written
+    mktempdir() do dir
+        make_fixture(dir, license = nothing)
+        write(joinpath(dir, "codemeta.json"), codemeta_license("MIT"))
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
+        cd(git_dir)
+        @test fixture_licenses(dir) == all_licensed("MIT")
+    end
+
+    # No license anywhere: an error that says how to choose one, and no change
+    mktempdir() do dir
+        make_fixture(dir, license = nothing)
+        before = fixture_files(dir)
+        message = try
+            ResearchSoftwareMetadata.crosswalk(dir)
+            "no error"
+        catch err
+            sprint(showerror, err)
+        end
+        cd(git_dir)
+        @test all(occursin(message),
+                  ["No license found", "crosswalk(license = \"",
+                      "https://spdx.org/licenses/", "FSF", "OSI",
+                      ResearchSoftwareMetadata.SUGGESTED_LICENSES...])
+        @test fixture_files(dir) == before
+    end
+
+    # Not an SPDX identifier: likewise
+    mktempdir() do dir
+        make_fixture(dir, license = "mit")
+        before = fixture_files(dir)
+        @test_throws "`mit` is not a recognised SPDX license identifier" ResearchSoftwareMetadata.crosswalk(dir)
+        cd(git_dir)
+        @test fixture_files(dir) == before
+    end
+
+    # The license argument gives a package its first license ...
+    mktempdir() do dir
+        make_fixture(dir, license = nothing)
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir,
+                                                           license = "MIT"))
+        cd(git_dir)
+        @test fixture_licenses(dir) == all_licensed("MIT")
+        @test startswith(read(joinpath(dir, "LICENSE"), String), "MIT License")
+        # ... and changes one that is already there, without update
+        @test isnothing(ResearchSoftwareMetadata.crosswalk(dir,
+                                                           license = "BSD-2-Clause"))
+        cd(git_dir)
+        @test fixture_licenses(dir) == all_licensed("BSD-2-Clause")
+        @test occursin("Redistribution",
+                       read(joinpath(dir, "LICENSE"), String))
+        # One that SPDX does not have changes nothing
+        before = fixture_files(dir)
+        @test_throws "not a recognised SPDX" ResearchSoftwareMetadata.crosswalk(dir,
+                                                                                license = "nonsense")
+        cd(git_dir)
+        @test fixture_files(dir) == before
     end
 end
 

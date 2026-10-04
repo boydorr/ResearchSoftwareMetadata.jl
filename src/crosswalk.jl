@@ -2,7 +2,7 @@
 
 """
     crosswalk(git_dir; category = nothing, keywords = nothing,
-              build = false, update = false)
+              license = nothing, build = false, update = false)
 
 Runs a crosswalk across `Project.toml`, `LICENSE`, `codemeta.json` and `.zenodo.json` as
 well as the julia source files to enforce consistency between the different metadata formats.
@@ -24,13 +24,20 @@ field - `false` leaves the instructions as is, `true` sets it to the same as the
 and a string sets it to that value. If `update` is true, changes to `Project.toml` (e.g. to
 the version or the license) are treated as deliberate and propagated to the other metadata
 files with `@info` messages instead of being reported as warnings or errors.
+The license is an [SPDX identifier](https://spdx.org/licenses/) such as `"MIT"`, taken
+from `license` in `Project.toml` or, failing that, from `codemeta.json`; the crosswalk
+throws an error if there is none or if it is not one SPDX recognises. The `license` argument
+sets or changes it, and like `category` is written back into `Project.toml`. A license in
+`Project.toml` that differs from the one already in `codemeta.json` is an error, and
+nothing is changed, unless `update` is true or the `license` argument is given.
 If any remote metadata query (orcid.org, ror.org, spdx.org,
 doi.org or Julia's General registry) cannot be completed, the crosswalk throws an error and
 all files are left in their original state.
 """
 function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`);
-                   category = nothing, keywords = nothing, build = false,
-                   update = false)
+                   category = nothing, keywords = nothing,
+                   license::Union{AbstractString, Nothing} = nothing,
+                   build = false, update = false)
     project = read_project(git_dir)
     rsmd = get!(project, "rsmd", OrderedDict{String, Any}())
     proj_version = VersionNumber(project["version"])
@@ -321,70 +328,62 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         project["authors"] = authors
     end
 
-    haslicense = false
-    license = nothing
-
-    if haskey(project, "license")
-        proj_license = project["license"]
-        cm_license = "https://spdx.org/licenses/" * proj_license
-        if haskey(codemeta, "license")
-            if codemeta["license"] == cm_license
-                haslicense = true
-                license = proj_license
-            elseif update
-                @info "Updating license in codemeta.json to match Project.toml " *
-                      "($(codemeta["license"]) → $cm_license)"
-                codemeta["license"] = cm_license
-                haslicense = true
-                license = proj_license
-            else
-                @error "License mismatch between Project.toml and codemeta.json: " *
-                       "$(codemeta["license"]) ≠ $cm_license"
-            end
-        else
-            codemeta["license"] = cm_license
-            haslicense = true
-            license = proj_license
-        end
+    # The license every file is written from. Passing `license` or `update`
+    # makes a change of license deliberate; any other disagreement stops the
+    # crosswalk here, before anything is written
+    recorded = get(codemeta, "license", nothing)
+    recorded isa AbstractString && (recorded = spdx_identifier(recorded))
+    if !isnothing(license)
+        license_id = license
+    elseif haskey(project, "license")
+        license_id = project["license"]
+        isnothing(recorded) || recorded == license_id || update ||
+            error("License mismatch between Project.toml and codemeta.json: " *
+                  "$license_id ≠ $recorded. Nothing has been changed. If " *
+                  "$license_id is the license you want, run " *
+                  "`crosswalk(update = true)`; if not, restore " *
+                  "`license = \"$recorded\"` in Project.toml")
+    elseif recorded isa AbstractString
+        license_id = recorded
     else
-        if haskey(codemeta, "license")
-            project["license"] = replace(codemeta["license"],
-                                         "https://spdx.org/licenses/" => "")
-            haslicense = true
-            license = project["license"]
-        else
-            @warn "No license metadata"
-        end
+        error("No license found in Project.toml or codemeta.json. Set one " *
+              "with `crosswalk(license = \"LGPL-3.0-or-later\")`, or add " *
+              "`license = \"LGPL-3.0-or-later\"` to Project.toml, using " *
+              LICENSE_ADVICE)
     end
+    for (place, held) in ("codemeta.json" => recorded,
+                          "Project.toml" => get(project, "license", nothing))
+        isnothing(held) || held == license_id ||
+            @info "Changing license in $place from $held to $license_id"
+    end
+    project["license"] = license_id
+    codemeta["license"] = "https://spdx.org/licenses/" * license_id
 
-    open_license = nothing
-    license_content = nothing
-    if haslicense
-        url = "https://spdx.org/licenses/$license.json"
-        headers = ["Accept" => "application/json"]
-        response = HTTP.get(url, headers, status_exception = false)
+    url = "https://spdx.org/licenses/$license_id.json"
+    response = HTTP.get(url, ["Accept" => "application/json"],
+                        status_exception = false)
+    response.status == 404 &&
+        error("`$license_id` is not a recognised SPDX license identifier. " *
+              "Use " * LICENSE_ADVICE)
+    response.status == 200 ||
+        error("Unable to fetch license text for $license_id from " *
+              "spdx.org, HTTP status $(response.status)")
 
-        response.status == 200 ||
-            error("Unable to fetch license text for $license from " *
-                  "spdx.org, HTTP status $(response.status)")
-
-        just_names = replace.(project["authors"], r" *<[^>]+> *" => "")
-        name_list = join(just_names, ", ", " and ")
-        json = JSON.parse(String(response.body))
-        open_license = json["isOsiApproved"]
-        content = json["licenseText"]
-        replaces = [r"<year>"i => years,
-            r"<owners?>"i => name_list,
-            r"<copyright holders?>"i => name_list,
-            r"<Owner Organization Name>"i => name_list,
-            r"<Asset Owner>"i => name_list,
-            r"<HOLDERS?>"i => name_list,
-            r"<name of author>"i => name_list,
-            r"<author's name or designee>"i => name_list]
-        for r in replaces
-            content = replace(content, r)
-        end
-        license_content = content
+    just_names = replace.(project["authors"], r" *<[^>]+> *" => "")
+    name_list = join(just_names, ", ", " and ")
+    json = JSON.parse(String(response.body))
+    open_license = json["isOsiApproved"]
+    license_content = json["licenseText"]
+    replaces = [r"<year>"i => years,
+        r"<owners?>"i => name_list,
+        r"<copyright holders?>"i => name_list,
+        r"<Owner Organization Name>"i => name_list,
+        r"<Asset Owner>"i => name_list,
+        r"<HOLDERS?>"i => name_list,
+        r"<name of author>"i => name_list,
+        r"<author's name or designee>"i => name_list]
+    for r in replaces
+        license_content = replace(license_content, r)
     end
 
     cm_authors = get(codemeta, "author", OrderedDict{String, Any}[])
@@ -556,10 +555,8 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         end
         push!(crosswalk_d["creators"], dict)
     end
-    if !isnothing(open_license)
-        crosswalk_d["access_right"] = open_license ? "open" : "closed"
-    end
-    crosswalk_d["license"] = project["license"]
+    crosswalk_d["access_right"] = open_license ? "open" : "closed"
+    crosswalk_d["license"] = license_id
     dict = OrderedDict{String, String}()
     dict["scheme"] = "url"
     dict["identifier"] = codemeta["codeRepository"]
@@ -579,16 +576,14 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     # Round-trip to ensure correct order if there were elements missing
     project = order_project(TOML.parse(sprint(TOML.print, project)))
 
-    headers = header_changes(git_dir, project["license"])
+    new_headers = header_changes(git_dir, license_id)
 
     # All remote queries have succeeded, so the files can now be written
-    if !isnothing(license_content)
-        file = joinpath(git_dir, "LICENSE")
-        open(file, "w") do io
-            return write(io, license_content)
-        end
-        rm(joinpath(git_dir, "LICENSE.md"), force = true)
+    file = joinpath(git_dir, "LICENSE")
+    open(file, "w") do io
+        return write(io, license_content)
     end
+    rm(joinpath(git_dir, "LICENSE.md"), force = true)
 
     file = joinpath(git_dir, "Project.toml")
     open(file, "w") do io
@@ -608,7 +603,7 @@ function crosswalk(git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
         @warn "$zenodo_problem. It has been overwritten, and any " *
               "information in it has been lost"
 
-    for (jl_file, content) in headers
+    for (jl_file, content) in new_headers
         write(jl_file, content)
     end
 
