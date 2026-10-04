@@ -96,21 +96,21 @@ function run_crosswalk(git_dir::AbstractString; category, keywords,
     proj_version = VersionNumber(project["version"])
 
     now = string(today())
-    cd(git_dir)
-    init = readchomp(`$(Git.git()) log --max-parents=0 --format=%ad --date=short -n 1`)
+    git = `$(Git.git()) -C $git_dir`
+    init = readchomp(`$git log --max-parents=0 --format=%ad --date=short -n 1`)
     releases = release_tags(git_dir)
     latest = isempty(releases) ? nothing :
              argmax(release -> release.version, releases)
     tag = isnothing(latest) ? proj_version : latest.version
     tag_date = isnothing(latest) ? now :
-               readchomp(`$(Git.git()) log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/$(latest.name)`)
-    remotes = readlines(`$(Git.git()) remote`)
+               readchomp(`$git log -1 --format=%ad --date=format:%Y-%m-%d refs/tags/$(latest.name)`)
+    remotes = readlines(`$git remote`)
     isempty(remotes) &&
         error("The repository at $git_dir has no git remote. The metadata " *
               "records where the repository is, so add one with " *
               "`git remote add origin <address>`")
     urls = map(remotes) do remote
-        return repository_url(readchomp(`$(Git.git()) remote get-url $remote`))
+        return repository_url(readchomp(`$git remote get-url $remote`))
     end
 
     repos = replace.(urls, r"^.*/([^/]+)$" => s"\1")

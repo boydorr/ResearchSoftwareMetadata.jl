@@ -42,13 +42,17 @@ end
 end
 
 @testset "Checks for other packages to copy" begin
-    # The two files are printed in the documentation as they are. This compares
-    # the listings only, not the instructions around them
+    # The two files, and the block at the end of this one that runs them, are
+    # printed in the documentation as they are. This compares the listings
+    # only, not the instructions around them
     page = read(joinpath(@__DIR__, "..", "docs", "src", "testing.md"), String)
     for name in ("clean_ResearchSoftwareMetadata.jl", "clean_JuliaFormatter.jl")
         file = read(joinpath(@__DIR__, name), String)
         @test occursin("```julia\n" * file * "```", page)
     end
+    suite = read(@__FILE__, String)
+    start = findlast("rsmd = get(ENV, \"RSMD_CROSSWALK\", \"FALSE\")", suite)
+    @test occursin("```julia\n" * suite[first(start):end] * "```", page)
 
     # The state of a repository can be read whatever its files are called, and
     # from any working directory
@@ -444,11 +448,12 @@ function all_licensed(license)
 end
 
 @testset "Crosswalk without ORCIDs" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     mktempdir() do dir
         make_fixture(dir)
+        # A crosswalk of another repository leaves the working directory alone
+        here = pwd()
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir) # crosswalk leaves the working directory changed
+        @test pwd() == here
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test length(codemeta["author"]) == 1
         author = codemeta["author"][1]
@@ -462,7 +467,6 @@ end
 end
 
 @testset "Project.toml as metadata source" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     doi = "10.5281/zenodo.12789179"
     extra = """
             description = "A fixture package"
@@ -474,7 +478,6 @@ end
     mktempdir() do dir
         make_fixture(dir, extra = extra)
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir) # crosswalk leaves the working directory changed
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test codemeta["description"] == "A fixture package"
         @test codemeta["keywords"] == ["fixture", "metadata"]
@@ -492,7 +495,6 @@ end
 end
 
 @testset "Reconstruct author_details" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     # From codemeta.json
     mktempdir() do dir
         make_fixture(dir, author_details = false)
@@ -518,7 +520,6 @@ end
                          """)
         end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir) # crosswalk leaves the working directory changed
         project = TOML.parsefile(joinpath(dir, "Project.toml"))
         @test haskey(project["rsmd"], "author_details")
         detail = project["rsmd"]["author_details"][1]
@@ -545,7 +546,6 @@ end
                          """)
         end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir) # crosswalk leaves the working directory changed
         project = TOML.parsefile(joinpath(dir, "Project.toml"))
         detail = project["rsmd"]["author_details"][1]
         @test detail["name"] == "Ann B Smith"
@@ -570,7 +570,6 @@ end
                          """)
         end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir) # crosswalk leaves the working directory changed
         project = TOML.parsefile(joinpath(dir, "Project.toml"))
         @test project["rsmd"]["author_details"] ==
               [Dict("name" => "Ann B Smith", "email" => "ann@example.com")]
@@ -581,7 +580,6 @@ end
 end
 
 @testset "Add new author from authors" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     mktempdir() do dir
         make_fixture(dir)
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
@@ -594,7 +592,6 @@ end
             return TOML.print(io, project)
         end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir) # crosswalk leaves the working directory changed
         project = TOML.parsefile(toml)
         @test project["authors"] ==
               ["Ann B Smith <ann@example.com>", "Bob Jones <bob@example.com>"]
@@ -613,7 +610,6 @@ end
 end
 
 @testset "Backfill Project.toml from codemeta.json" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     mktempdir() do dir
         make_fixture(dir)
         open(joinpath(dir, "codemeta.json"), "w") do io
@@ -627,7 +623,6 @@ end
                          """)
         end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir) # crosswalk leaves the working directory changed
         project = TOML.parsefile(joinpath(dir, "Project.toml"))
         @test project["rsmd"]["description"] == "A fixture package"
         @test project["rsmd"]["keywords"] == ["fixture", "metadata"]
@@ -640,7 +635,6 @@ end
 end
 
 @testset "A first crosswalk settles everything" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     # Starting from each of these, a second crosswalk has nothing left to do
     starts = ["author_details given" => dir -> make_fixture(dir),
         "authors alone" => dir -> make_fixture(dir, author_details = false),
@@ -660,10 +654,8 @@ end
             start(dir)
             @test isnothing(ResearchSoftwareMetadata.crosswalk(dir,
                                                                build = true))
-            cd(git_dir) # crosswalk leaves the working directory changed
             settled = fixture_files(dir)
             @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-            cd(git_dir)
             @test fixture_files(dir) == settled
         end
     end
@@ -682,14 +674,12 @@ end
             return TOML.print(io, project)
         end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir, build = true))
-        cd(git_dir)
         settled = fixture_files(dir)
         project = TOML.parsefile(toml)
         @test project["authors"] ==
               ["Ann B Smith <ann@example.com>", "bob <bob@example.com>"]
         @test occursin("Ann B Smith and bob\n", settled["LICENSE"])
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir)
         @test fixture_files(dir) == settled
     end
 
@@ -704,7 +694,6 @@ end
             with_logger(logger) do
                 return ResearchSoftwareMetadata.crosswalk(dir)
             end
-            cd(git_dir)
             @test count(asks, logger.logs) == expected
         end
     end
@@ -713,7 +702,6 @@ end
     mktempdir() do dir
         make_fixture(dir)
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir)
         rsmd = TOML.parsefile(joinpath(dir, "Project.toml"))["rsmd"]
         @test rsmd["keywords"] == ["julia"]
         @test rsmd["development_status"] == "active"
@@ -721,7 +709,6 @@ end
 end
 
 @testset "Propagate Project.toml changes with update" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     extra = """
             description = "A fixture package"
             category = "metadata"
@@ -730,7 +717,6 @@ end
     mktempdir() do dir
         make_fixture(dir, extra = extra)
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir, build = true))
-        cd(git_dir) # crosswalk leaves the working directory changed
         toml = joinpath(dir, "Project.toml")
         project = TOML.parsefile(toml)
         project["license"] = "BSD-2-Clause"
@@ -739,7 +725,6 @@ end
             return TOML.print(io, project)
         end
         @test_nowarn ResearchSoftwareMetadata.crosswalk(dir, update = true)
-        cd(git_dir)
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test codemeta["license"] == "https://spdx.org/licenses/BSD-2-Clause"
         @test codemeta["description"] == "An updated fixture package"
@@ -755,7 +740,6 @@ end
     mktempdir() do dir
         make_fixture(dir, extra = extra)
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir, build = true))
-        cd(git_dir) # crosswalk leaves the working directory changed
         toml = joinpath(dir, "Project.toml")
         project = TOML.parsefile(toml)
         project["license"] = "BSD-2-Clause"
@@ -764,13 +748,11 @@ end
         end
         before = fixture_files(dir)
         @test_throws "License mismatch" ResearchSoftwareMetadata.crosswalk(dir)
-        cd(git_dir)
         @test fixture_files(dir) == before
     end
 end
 
 @testset "Declaring the license" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     spdx = "https://spdx.org/licenses/MIT"
     codemeta_license(license) = "{\n    \"license\": \"$license\"\n}\n"
 
@@ -788,7 +770,6 @@ end
             write(joinpath(dir, "codemeta.json"), codemeta_license(written))
             @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
             @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-            cd(git_dir) # crosswalk leaves the working directory changed
             @test fixture_licenses(dir) == all_licensed("MIT")
         end
     end
@@ -799,7 +780,6 @@ end
         write(joinpath(dir, "codemeta.json"), codemeta_license("MIT"))
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir)
         @test fixture_licenses(dir) == all_licensed("MIT")
     end
 
@@ -813,7 +793,6 @@ end
         catch err
             sprint(showerror, err)
         end
-        cd(git_dir)
         @test all(occursin(message),
                   ["No license found", "crosswalk(license = \"",
                       "https://spdx.org/licenses/", "FSF", "OSI",
@@ -826,7 +805,6 @@ end
         make_fixture(dir, license = "mit")
         before = fixture_files(dir)
         @test_throws "`mit` is not a recognised SPDX license identifier" ResearchSoftwareMetadata.crosswalk(dir)
-        cd(git_dir)
         @test fixture_files(dir) == before
     end
 
@@ -835,13 +813,11 @@ end
         make_fixture(dir, license = nothing)
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir,
                                                            license = "MIT"))
-        cd(git_dir)
         @test fixture_licenses(dir) == all_licensed("MIT")
         @test startswith(read(joinpath(dir, "LICENSE"), String), "MIT License")
         # ... and changes one that is already there, without update
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir,
                                                            license = "BSD-2-Clause"))
-        cd(git_dir)
         @test fixture_licenses(dir) == all_licensed("BSD-2-Clause")
         @test occursin("Redistribution",
                        read(joinpath(dir, "LICENSE"), String))
@@ -849,20 +825,17 @@ end
         before = fixture_files(dir)
         @test_throws "not a recognised SPDX" ResearchSoftwareMetadata.crosswalk(dir,
                                                                                 license = "nonsense")
-        cd(git_dir)
         @test fixture_files(dir) == before
     end
 end
 
 @testset "License files" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     names(dir) = basename.(ResearchSoftwareMetadata.license_files(dir))
     # The texts this package writes, from which to make other license files
     generated = Dict(map(("MIT", "BSD-2-Clause", "GPL-3.0-or-later")) do license
                          return mktempdir() do dir
                              make_fixture(dir, license = license)
                              ResearchSoftwareMetadata.crosswalk(dir)
-                             cd(git_dir) # crosswalk changes the directory
                              return license =>
                                  read(joinpath(dir, "LICENSE"), String)
                          end
@@ -912,7 +885,6 @@ end
             write(joinpath(dir, name), text)
             @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
             @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-            cd(git_dir) # crosswalk leaves the working directory changed
             @test read(joinpath(dir, name), String) == text
             @test names(dir) == [name]
         end
@@ -925,12 +897,10 @@ end
             write(joinpath(dir, "COPYING"), text)
             before = fixture_files(dir)
             @test_throws "COPYING does not hold the MIT license" ResearchSoftwareMetadata.crosswalk(dir)
-            cd(git_dir)
             @test fixture_files(dir) == before
             # ... unless the change is deliberate, when LICENSE takes its place
             @test isnothing(ResearchSoftwareMetadata.crosswalk(dir,
                                                                update = true))
-            cd(git_dir)
             @test names(dir) == ["LICENSE"]
             @test startswith(read(joinpath(dir, "LICENSE"), String),
                              "MIT License")
@@ -948,7 +918,6 @@ end
             return TOML.print(io, project)
         end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir)
         @test occursin("Ann B Smith and Bob Jones",
                        read(joinpath(dir, "LICENSE"), String))
     end
@@ -961,7 +930,6 @@ end
         @test_throws "LICENSE.md holds the MIT license, which `crosswalk(license = \"MIT\")`" ResearchSoftwareMetadata.crosswalk(dir)
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir,
                                                            license = "MIT"))
-        cd(git_dir)
         @test read(joinpath(dir, "LICENSE.md"), String) == quoted
         @test names(dir) == ["LICENSE.md"]
     end
@@ -977,11 +945,9 @@ end
 end
 
 @testset "Crosswalk without workflows" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     mktempdir() do dir
         make_fixture(dir, workflows = false)
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir) # crosswalk leaves the working directory changed
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test !haskey(codemeta, "operatingSystem")
     end
@@ -997,14 +963,12 @@ end
                          """)
         end
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir) # crosswalk leaves the working directory changed
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test codemeta["operatingSystem"] == ["Linux", "macOS"]
     end
 end
 
 @testset "Crosswalk finds the CI workflow" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     repo = "https://github.com/example/RSMDFixture.jl"
     # The workflow that runs the tests, whatever it is called
     mktempdir() do dir
@@ -1015,7 +979,6 @@ end
               one_job("runs-on: windows-latest, $RUNTEST"))
         write(joinpath(folder, first(TAGBOT)), last(TAGBOT))
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir) # crosswalk leaves the working directory changed
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test codemeta["continuousIntegration"] ==
               repo * "/actions/workflows/CI.yml"
@@ -1030,14 +993,12 @@ end
         mkpath(folder)
         write(joinpath(folder, first(TAGBOT)), last(TAGBOT))
         @test_logs (:warn, r"CI not found") match_mode=:any ResearchSoftwareMetadata.crosswalk(dir)
-        cd(git_dir)
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test !haskey(codemeta, "continuousIntegration")
     end
 end
 
 @testset "Metadata files that cannot be read" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     # A missing comma between two entries of a list
     broken = """
              {
@@ -1064,7 +1025,6 @@ end
             make_fixture(dir, author_details = author_details)
             write(joinpath(dir, ".zenodo.json"), broken)
             @test_logs lost match_mode=:any ResearchSoftwareMetadata.crosswalk(dir)
-            cd(git_dir) # crosswalk leaves the working directory changed
             zenodo = JSON.parsefile(joinpath(dir, ".zenodo.json"))
             @test [c["name"] for c in zenodo["creators"]] == ["Smith, Ann B"]
         end
@@ -1074,7 +1034,6 @@ end
         project_content, src_content = make_fixture(dir)
         write(joinpath(dir, "codemeta.json"), broken)
         @test_throws "Unable to read codemeta.json" ResearchSoftwareMetadata.crosswalk(dir)
-        cd(git_dir) # crosswalk leaves the working directory changed
         @test read(joinpath(dir, "codemeta.json"), String) == broken
         @test read(joinpath(dir, "Project.toml"), String) == project_content
         @test !isfile(joinpath(dir, ".zenodo.json"))
@@ -1083,7 +1042,6 @@ end
 end
 
 @testset "Repository addresses" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     web = "https://github.com/example/RSMDFixture.jl"
 
     @testset "Remotes" begin
@@ -1108,7 +1066,6 @@ end
     mktempdir() do dir
         make_fixture(dir, remote = "git@github.com:example/RSMDFixture.jl.git")
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir) # crosswalk leaves the working directory changed
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test codemeta["codeRepository"] == web
         @test codemeta["name"] == "RSMDFixture.jl"
@@ -1126,7 +1083,6 @@ end
               "{\n    \"codeRepository\": " *
               "\"git@github.com:example/RSMDFixture.jl\"\n}\n")
         @test_logs (:info, r"Writing the repository in codemeta.json as") match_mode=:any ResearchSoftwareMetadata.crosswalk(dir)
-        cd(git_dir)
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test codemeta["codeRepository"] == web
     end
@@ -1136,13 +1092,11 @@ end
         make_fixture(dir, remote = nothing)
         before = fixture_files(dir)
         @test_throws "has no git remote" ResearchSoftwareMetadata.crosswalk(dir)
-        cd(git_dir)
         @test fixture_files(dir) == before
     end
 end
 
 @testset "Release tags" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     tag(dir, name) = run(`$(Git.git()) -C $dir tag $name`)
 
     # Only a v and a version number is a release of the package
@@ -1163,7 +1117,6 @@ end
         make_fixture(dir)
         foreach(name -> tag(dir, name), ["v0.1.0", "docs-preview", "2024.1"])
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir) # crosswalk leaves the working directory changed
         @test TOML.parsefile(joinpath(dir, "Project.toml"))["version"] ==
               "0.1.0"
         @test JSON.parsefile(joinpath(dir, "codemeta.json"))["version"] ==
@@ -1175,7 +1128,6 @@ end
         make_fixture(dir)
         tag(dir, "v0.1")
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir)
         @test JSON.parsefile(joinpath(dir, "codemeta.json"))["version"] ==
               "v0.1.0"
     end
@@ -1195,7 +1147,6 @@ end
 end
 
 @testset "Links to the default branch" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     web = "https://github.com/example/RSMDFixture.jl"
     # HEAD is the default branch of the repository, whatever it is called
     readme = web * "/blob/HEAD/README.md"
@@ -1205,7 +1156,6 @@ end
         make_fixture(dir)
         run(`$(Git.git()) -C $dir checkout -q -b feature`)
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir, build = true))
-        cd(git_dir) # crosswalk leaves the working directory changed
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test codemeta["readme"] == readme
         @test codemeta["buildInstructions"] == readme
@@ -1221,7 +1171,6 @@ end
                     web * "/blob/main/README.md"))
         @test_logs (:info, r"Moving readme in codemeta.json") (:info,
                                                                r"Moving buildInstructions") match_mode=:any ResearchSoftwareMetadata.crosswalk(dir)
-        cd(git_dir)
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test codemeta["readme"] == readme
         @test codemeta["buildInstructions"] == readme
@@ -1233,7 +1182,6 @@ end
         install = web * "/blob/feature/INSTALL.md"
         write(joinpath(dir, "codemeta.json"), links(elsewhere, install))
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir)
         codemeta = JSON.parsefile(joinpath(dir, "codemeta.json"))
         @test codemeta["readme"] == elsewhere
         @test codemeta["buildInstructions"] == install
@@ -1241,7 +1189,6 @@ end
 end
 
 @testset "Source file headers" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     header = "# SPDX-License-Identifier: MIT"
     mktempdir() do dir
         make_fixture(dir)
@@ -1273,7 +1220,6 @@ end
 
         # A file with its header, a notebook and an ignored file are not rewritten
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir) # crosswalk leaves the working directory changed
         @test contents() == merge(before, after)
         @test isempty(ResearchSoftwareMetadata.header_changes(dir, "MIT"))
     end
@@ -1297,7 +1243,6 @@ function declare_additional(dir, licenses)
 end
 
 @testset "Files under another license" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     changes = ResearchSoftwareMetadata.header_changes
     other = "# SPDX-License-Identifier: BSD-3-Clause\n\nx = 1\n"
     either = "# SPDX-License-Identifier: MIT OR BSD-3-Clause\n\nx = 1\n"
@@ -1331,13 +1276,11 @@ end
         @test_throws "additional_licenses" ResearchSoftwareMetadata.crosswalk(dir)
         @test_throws "src/other.jl: BSD-3-Clause" ResearchSoftwareMetadata.crosswalk(dir,
                                                                                      update = true)
-        cd(git_dir) # crosswalk leaves the working directory changed
         @test fixture_files(dir) == before
 
         # Once the license is declared the file is left as it is ...
         declare_additional(dir, ["BSD-3-Clause"])
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir)
         @test read(file, String) == other
         @test fixture_licenses(dir) == all_licensed("MIT")
         project = TOML.parsefile(joinpath(dir, "Project.toml"))
@@ -1346,7 +1289,6 @@ end
         # that were under the package's license follow it
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir,
                                                            license = "BSD-2-Clause"))
-        cd(git_dir)
         @test read(file, String) == other
         @test fixture_licenses(dir) == all_licensed("BSD-2-Clause")
     end
@@ -1357,13 +1299,11 @@ end
         declare_additional(dir, ["nonsense"])
         before = fixture_files(dir)
         @test_throws "`nonsense` in additional_licenses is not a recognised" ResearchSoftwareMetadata.crosswalk(dir)
-        cd(git_dir)
         @test fixture_files(dir) == before
     end
 end
 
 @testset "Relicensing" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     relicense! = ResearchSoftwareMetadata.relicense!
     names(dir) = basename.(ResearchSoftwareMetadata.license_files(dir))
     other = "# SPDX-License-Identifier: BSD-3-Clause\n\nx = 1\n"
@@ -1388,10 +1328,8 @@ end
     mktempdir() do dir
         own = tangled(dir, declared = true)
         @test isnothing(relicense!("MIT", dir))
-        cd(git_dir) # crosswalk leaves the working directory changed
         @test read(joinpath(dir, "LICENSE.md"), String) == own
         @test isnothing(relicense!("BSD-2-Clause", dir))
-        cd(git_dir)
         @test fixture_licenses(dir) == all_licensed("BSD-2-Clause")
         @test names(dir) == ["LICENSE"]
         @test read(joinpath(dir, "src", "other.jl"), String) == other
@@ -1403,7 +1341,6 @@ end
         before = fixture_files(dir)
         @test_throws "src/other.jl: BSD-3-Clause" relicense!("BSD-2-Clause",
                                                              dir)
-        cd(git_dir)
         @test fixture_files(dir) == before
     end
 
@@ -1413,7 +1350,6 @@ end
             tangled(dir, declared = declared)
             @test isnothing(relicense!("BSD-2-Clause", dir,
                                        overwrite_all = true))
-            cd(git_dir)
             @test fixture_licenses(dir) == all_licensed("BSD-2-Clause")
             @test names(dir) == ["LICENSE"]
             @test occursin("Ann B Smith",
@@ -1423,7 +1359,6 @@ end
             # The package is consistent afterwards
             before = fixture_files(dir)
             @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-            cd(git_dir)
             @test fixture_files(dir) == before
         end
     end
@@ -1432,7 +1367,6 @@ end
     mktempdir() do dir
         tangled(dir, declared = true)
         @test isnothing(relicense!("MIT", dir, overwrite_all = true))
-        cd(git_dir)
         @test names(dir) == ["LICENSE"]
         @test occursin("Ann B Smith", read(joinpath(dir, "LICENSE"), String))
     end
@@ -1444,7 +1378,6 @@ end
             before = fixture_files(dir)
             @test_throws "not a recognised SPDX" relicense!("nonsense", dir,
                                                             overwrite_all = overwrite_all)
-            cd(git_dir)
             @test fixture_files(dir) == before
         end
     end
@@ -1453,25 +1386,21 @@ end
     mktempdir() do dir
         make_fixture(dir)
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir)
         # In two steps, as the names are one file where case is ignored
         mv(joinpath(dir, "LICENSE"), joinpath(dir, "renaming"))
         mv(joinpath(dir, "renaming"), joinpath(dir, "License"))
         @test isnothing(ResearchSoftwareMetadata.crosswalk(dir))
-        cd(git_dir)
         @test names(dir) == ["LICENSE"]
         @test startswith(read(joinpath(dir, "LICENSE"), String), "MIT License")
     end
 end
 
 @testset "Failed crosswalk leaves files unchanged" begin
-    git_dir = readchomp(`$(Git.git()) rev-parse --show-toplevel`)
     mktempdir() do dir
         # An invalid SPDX identifier makes the license lookup fail
         project_content, src_content = make_fixture(dir,
                                                     license = "Not-A-License")
         @test_throws ErrorException ResearchSoftwareMetadata.crosswalk(dir)
-        cd(git_dir) # crosswalk leaves the working directory changed
         @test read(joinpath(dir, "Project.toml"), String) == project_content
         @test read(joinpath(dir, "src", "RSMDFixture.jl"), String) ==
               src_content
@@ -1485,8 +1414,7 @@ rsmd = get(ENV, "RSMD_CROSSWALK", "FALSE")
 if rsmd == "TRUE" || !haskey(ENV, "RUNNER_OS") # Crosswalk runner or local testing
     # Test RSMD crosswalk and other hygiene issues
 
-    # Identify files that are checking package hygiene; use @__DIR__ because
-    # crosswalk() in earlier testsets leaves the working directory changed
+    # Identify files that are checking package hygiene
     cleanbase = map(file -> replace(file, r"clean_(.*).jl$" => s"\1"),
                     filter(str -> occursin(r"^clean_.*\.jl$", str),
                            readdir(@__DIR__)))
