@@ -29,6 +29,11 @@ using DataStructures
 using HTTP
 using LicenseCheck
 using YAML
+using Compat: @compat
+
+# The supported entry points, which are called by their qualified names
+@compat public crosswalk, relicense!, increase_patch, increase_minor,
+               increase_major
 
 include("project.jl")
 include("remotequeries.jl")

@@ -24,6 +24,23 @@ using .GitUtils
     @test is_repo_clean(git_dir)
 end
 
+@testset "Public names" begin
+    entry_points = (:crosswalk, :relicense!, :increase_patch, :increase_minor,
+                    :increase_major)
+    @test all(name -> isdefined(ResearchSoftwareMetadata, name), entry_points)
+    # Nothing is exported, so every call is by a qualified name
+    @test names(ResearchSoftwareMetadata, all = false) ⊆
+          [:ResearchSoftwareMetadata, entry_points...]
+    @test !any(name -> Base.isexported(ResearchSoftwareMetadata, name),
+               entry_points)
+    # Names can only be marked as public from Julia 1.11
+    if isdefined(Base, :ispublic)
+        @test all(name -> Base.ispublic(ResearchSoftwareMetadata, name),
+                  entry_points)
+        @test !Base.ispublic(ResearchSoftwareMetadata, :read_project)
+    end
+end
+
 @testset "Failed metadata lookups" begin
     @test isnothing(ResearchSoftwareMetadata.get_person_from_orcid("0000-0000-0000-0000"))
     @test isnothing(ResearchSoftwareMetadata.get_organisation_from_ror("invalid"))
